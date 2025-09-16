@@ -5,6 +5,13 @@ export interface Category {
   createdAt: string
 }
 
+export interface Destination {
+  id: string
+  name: string
+  description?: string
+  createdAt: string
+}
+
 export interface Product {
   id: string
   name: string
@@ -15,6 +22,7 @@ export interface Product {
   yearOfPurchase: number
   unitNumber: number
   description?: string
+  destinationId?: string
   createdAt: string
   updatedAt: string
 }
@@ -41,15 +49,38 @@ const DEFAULT_CATEGORIES: Category[] = [
   },
 ]
 
+const DEFAULT_DESTINATIONS: Destination[] = [
+  {
+    id: "1",
+    name: "Room-1",
+    description: "Main office room",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    name: "Room-2",
+    description: "Conference room",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "3",
+    name: "Storage",
+    description: "Storage area",
+    createdAt: new Date().toISOString(),
+  },
+]
+
 export class ProductService {
   private static instance: ProductService
   private products: Product[] = []
   private categories: Category[] = DEFAULT_CATEGORIES
+  private destinations: Destination[] = DEFAULT_DESTINATIONS
 
   private constructor() {
     if (typeof window !== "undefined") {
       const storedProducts = localStorage.getItem("el-node-products")
       const storedCategories = localStorage.getItem("el-node-categories")
+      const storedDestinations = localStorage.getItem("el-node-destinations")
 
       if (storedProducts) {
         this.products = JSON.parse(storedProducts)
@@ -59,6 +90,11 @@ export class ProductService {
       } else {
         // Save default categories
         localStorage.setItem("el-node-categories", JSON.stringify(DEFAULT_CATEGORIES))
+      }
+      if (storedDestinations) {
+        this.destinations = JSON.parse(storedDestinations)
+      } else {
+        localStorage.setItem("el-node-destinations", JSON.stringify(DEFAULT_DESTINATIONS))
       }
     }
   }
@@ -82,6 +118,12 @@ export class ProductService {
     }
   }
 
+  private saveDestinations(): void {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("el-node-destinations", JSON.stringify(this.destinations))
+    }
+  }
+
   private generateUniqueCode(category: Category, productCode: string, year: number): string {
     // Find the next unit number for this combination
     const existingProducts = this.products.filter(
@@ -101,6 +143,7 @@ export class ProductService {
     categoryId: string
     yearOfPurchase: number
     description?: string
+    destinationId?: string
   }): { success: boolean; product?: Product; error?: string } {
     const category = this.categories.find((c) => c.id === data.categoryId)
     if (!category) {
@@ -128,6 +171,7 @@ export class ProductService {
       yearOfPurchase: data.yearOfPurchase,
       unitNumber,
       description: data.description,
+      destinationId: data.destinationId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -136,6 +180,19 @@ export class ProductService {
     this.saveProducts()
 
     return { success: true, product }
+  }
+
+  updateProductDestination(productId: string, destinationId?: string): { success: boolean; error?: string } {
+    const productIndex = this.products.findIndex((p) => p.id === productId)
+    if (productIndex === -1) {
+      return { success: false, error: "Product not found" }
+    }
+
+    this.products[productIndex].destinationId = destinationId
+    this.products[productIndex].updatedAt = new Date().toISOString()
+    this.saveProducts()
+
+    return { success: true }
   }
 
   updateProductStatus(productId: string, status: Product["status"]): { success: boolean; error?: string } {
@@ -159,8 +216,56 @@ export class ProductService {
     return this.products.filter((p) => p.status === status)
   }
 
+  getProductsByDestination(destinationId: string): Product[] {
+    return this.products.filter((p) => p.destinationId === destinationId)
+  }
+
   getCategories(): Category[] {
     return [...this.categories]
+  }
+
+  getDestinations(): Destination[] {
+    return [...this.destinations]
+  }
+
+  addDestination(name: string, description?: string): { success: boolean; destination?: Destination; error?: string } {
+    // Check if destination name already exists
+    if (this.destinations.some((d) => d.name.toLowerCase() === name.toLowerCase())) {
+      return { success: false, error: "Destination name already exists" }
+    }
+
+    const destination: Destination = {
+      id: Date.now().toString(),
+      name,
+      description,
+      createdAt: new Date().toISOString(),
+    }
+
+    this.destinations.push(destination)
+    this.saveDestinations()
+
+    return { success: true, destination }
+  }
+
+  deleteDestination(destinationId: string): { success: boolean; error?: string } {
+    // Check if any products are assigned to this destination
+    const productsInDestination = this.products.filter((p) => p.destinationId === destinationId)
+    if (productsInDestination.length > 0) {
+      return {
+        success: false,
+        error: `Cannot delete destination. ${productsInDestination.length} products are assigned to it.`,
+      }
+    }
+
+    const destinationIndex = this.destinations.findIndex((d) => d.id === destinationId)
+    if (destinationIndex === -1) {
+      return { success: false, error: "Destination not found" }
+    }
+
+    this.destinations.splice(destinationIndex, 1)
+    this.saveDestinations()
+
+    return { success: true }
   }
 
   addCategory(name: string, code: string): { success: boolean; category?: Category; error?: string } {
@@ -199,5 +304,25 @@ export class ProductService {
       discarded,
       missing,
     }
+  }
+
+  getDestinationStats() {
+    return this.destinations.map((destination) => {
+      const products = this.getProductsByDestination(destination.id)
+      const statusCounts = {
+        active: products.filter((p) => p.status === "active").length,
+        maintenance: products.filter((p) => p.status === "maintenance").length,
+        damaged: products.filter((p) => p.status === "damaged").length,
+        discarded: products.filter((p) => p.status === "discarded").length,
+        missing: products.filter((p) => p.status === "missing").length,
+      }
+
+      return {
+        destination,
+        totalProducts: products.length,
+        statusCounts,
+        products,
+      }
+    })
   }
 }

@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { ProductService, type Product, type Category } from "@/lib/products"
+import { ProductService, type Product, type Category, type Destination } from "@/lib/products"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,7 @@ export function ProductManagement() {
   const { canEdit } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [destinations, setDestinations] = useState<Destination[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -48,6 +49,7 @@ export function ProductManagement() {
   const loadData = () => {
     setProducts(productService.getProducts())
     setCategories(productService.getCategories())
+    setDestinations(productService.getDestinations())
   }
 
   const filteredProducts = products.filter((product) => {
@@ -63,6 +65,13 @@ export function ProductManagement() {
 
   const handleStatusUpdate = (productId: string, newStatus: Product["status"]) => {
     const result = productService.updateProductStatus(productId, newStatus)
+    if (result.success) {
+      loadData()
+    }
+  }
+
+  const handleDestinationUpdate = (productId: string, destinationId?: string) => {
+    const result = productService.updateProductDestination(productId, destinationId)
     if (result.success) {
       loadData()
     }
@@ -90,6 +99,7 @@ export function ProductManagement() {
               </DialogHeader>
               <AddProductForm
                 categories={categories}
+                destinations={destinations}
                 onSuccess={() => {
                   loadData()
                   setIsAddDialogOpen(false)
@@ -156,42 +166,62 @@ export function ProductManagement() {
                     <TableHead>Unique Code</TableHead>
                     <TableHead>Product Name</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead>Destination</TableHead>
                     <TableHead>Year</TableHead>
                     <TableHead>Status</TableHead>
                     {canEdit() && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-mono font-medium">{product.uniqueCode}</TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{product.name}</div>
-                          {product.description && (
-                            <div className="text-sm text-muted-foreground">{product.description}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{product.category.name}</Badge>
-                      </TableCell>
-                      <TableCell>{product.yearOfPurchase}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={STATUS_COLORS[product.status]}>
-                          {product.status}
-                        </Badge>
-                      </TableCell>
-                      {canEdit() && (
+                  {filteredProducts.map((product) => {
+                    const destination = destinations.find((d) => d.id === product.destinationId)
+                    return (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-mono font-medium">{product.uniqueCode}</TableCell>
                         <TableCell>
-                          <StatusUpdateDropdown
-                            currentStatus={product.status}
-                            onStatusChange={(status) => handleStatusUpdate(product.id, status)}
-                          />
+                          <div>
+                            <div className="font-medium">{product.name}</div>
+                            {product.description && (
+                              <div className="text-sm text-muted-foreground">{product.description}</div>
+                            )}
+                          </div>
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
+                        <TableCell>
+                          <Badge variant="outline">{product.category.name}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {destination ? (
+                            <Badge variant="secondary">{destination.name}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No location</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{product.yearOfPurchase}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={STATUS_COLORS[product.status]}>
+                            {product.status}
+                          </Badge>
+                        </TableCell>
+                        {canEdit() && (
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <StatusUpdateDropdown
+                                currentStatus={product.status}
+                                onStatusChange={(status) => handleStatusUpdate(product.id, status)}
+                              />
+                              <DestinationUpdateDropdown
+                                currentDestinationId={product.destinationId}
+                                destinations={destinations}
+                                onDestinationChange={(destinationId) =>
+                                  handleDestinationUpdate(product.id, destinationId)
+                                }
+                              />
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -204,9 +234,11 @@ export function ProductManagement() {
 
 function AddProductForm({
   categories,
+  destinations,
   onSuccess,
 }: {
   categories: Category[]
+  destinations: Destination[]
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
@@ -215,6 +247,7 @@ function AddProductForm({
     categoryId: "",
     yearOfPurchase: new Date().getFullYear(),
     description: "",
+    destinationId: "",
   })
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -237,6 +270,7 @@ function AddProductForm({
       categoryId: formData.categoryId,
       yearOfPurchase: formData.yearOfPurchase,
       description: formData.description,
+      destinationId: formData.destinationId || undefined,
     })
 
     if (result.success) {
@@ -247,6 +281,7 @@ function AddProductForm({
         categoryId: "",
         yearOfPurchase: new Date().getFullYear(),
         description: "",
+        destinationId: "",
       })
     } else {
       setError(result.error || "Failed to add product")
@@ -290,6 +325,26 @@ function AddProductForm({
             {categories.map((category) => (
               <SelectItem key={category.id} value={category.id}>
                 {category.name} ({category.code})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="destination">Destination (Optional)</Label>
+        <Select
+          value={formData.destinationId || "none"}
+          onValueChange={(value) => setFormData({ ...formData, destinationId: value === "none" ? "" : value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select destination" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No destination</SelectItem>
+            {destinations.map((destination) => (
+              <SelectItem key={destination.id} value={destination.id}>
+                {destination.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -365,6 +420,35 @@ function StatusUpdateDropdown({
               />
               {status}
             </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function DestinationUpdateDropdown({
+  currentDestinationId,
+  destinations,
+  onDestinationChange,
+}: {
+  currentDestinationId?: string
+  destinations: Destination[]
+  onDestinationChange: (destinationId?: string) => void
+}) {
+  return (
+    <Select
+      value={currentDestinationId || "none"}
+      onValueChange={(value) => onDestinationChange(value === "none" ? undefined : value)}
+    >
+      <SelectTrigger className="w-32">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">No Location</SelectItem>
+        {destinations.map((destination) => (
+          <SelectItem key={destination.id} value={destination.id}>
+            {destination.name}
           </SelectItem>
         ))}
       </SelectContent>

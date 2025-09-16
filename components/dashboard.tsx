@@ -5,10 +5,11 @@ import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Package, Settings, LogOut, Users, BarChart3 } from "lucide-react"
+import { LayoutDashboard, Package, Settings, LogOut, Users, BarChart3, MapPin } from "lucide-react"
 import { ProductManagement } from "@/components/product-management"
 import { Analytics } from "@/components/analytics"
 import { CategoryManagement } from "@/components/category-management"
+import { DestinationManagement } from "@/components/destination-management"
 import { ProductService } from "@/lib/products"
 
 export function Dashboard() {
@@ -18,6 +19,7 @@ export function Dashboard() {
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "products", label: "Products", icon: Package },
+    { id: "destinations", label: "Destinations", icon: MapPin },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     ...(canEdit() ? [{ id: "categories", label: "Categories", icon: Settings }] : []),
     ...(canEdit() ? [{ id: "users", label: "Users", icon: Users }] : []),
@@ -76,6 +78,7 @@ export function Dashboard() {
         <main className="flex-1 p-6">
           {activeTab === "dashboard" && <DashboardOverview />}
           {activeTab === "products" && <ProductManagement />}
+          {activeTab === "destinations" && <DestinationManagement />}
           {activeTab === "analytics" && <Analytics />}
           {activeTab === "categories" && canEdit() && <CategoryManagement />}
           {activeTab === "users" && canEdit() && <div>Users section - Future enhancement</div>}
