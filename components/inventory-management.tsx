@@ -21,7 +21,17 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, Search, Filter, Package } from "lucide-react"
+import { Plus, Search, Filter, Package, Trash2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const STATUS_COLORS = {
   active: "bg-green-100 text-green-800 border-green-200",
@@ -40,6 +50,8 @@ export function InventoryManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const productService = ProductService.getInstance()
 
   useEffect(() => {
@@ -75,6 +87,18 @@ export function InventoryManagement() {
     const result = productService.updateInventoryItemDestination(itemId, destinationId)
     if (result.success) {
       loadData()
+    }
+  }
+
+  const handleDeleteItem = () => {
+    if (!itemToDelete) return
+
+    const result = productService.deleteInventoryItem(itemToDelete.id)
+    if (result.success) {
+      loadData()
+      setItemToDelete(null)
+    } else {
+      setDeleteError(result.error || "An unknown error occurred.")
     }
   }
 
@@ -212,6 +236,16 @@ export function InventoryManagement() {
                                   handleDestinationUpdate(item.id, destinationId)
                                 }
                               />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDeleteError(null)
+                                  setItemToDelete(item)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             </div>
                           </TableCell>
                         )}
@@ -224,6 +258,39 @@ export function InventoryManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!itemToDelete}
+        onOpenChange={() => {
+          setItemToDelete(null)
+          setDeleteError(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteError ? (
+                <span className="text-destructive">{deleteError}</span>
+              ) : (
+                <span>
+                  This action cannot be undone. This will permanently delete the inventory item with code
+                  <span className="font-bold"> {itemToDelete?.uniqueCode}</span>.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {!deleteError && (
+              <AlertDialogAction onClick={handleDeleteItem} className="bg-destructive hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -170,7 +170,7 @@ export class ProductService {
     }
   }
 
-  private generateUniqueCode(productCode: string): string {
+  private generateUniqueCode(categoryCode: string, productCode: string, yearOfPurchase: number): string {
     // Find the next serial number for this product code
     const existingItems = this.inventoryItems.filter(
       (item) => item.product.code === productCode
@@ -179,7 +179,7 @@ export class ProductService {
     const nextSerialNumber = existingItems.length + 1
     const serialNumberPadded = nextSerialNumber.toString().padStart(4, "0")
 
-    return `EHS-${productCode}-${serialNumberPadded}`
+    return `EHS-${categoryCode}-${productCode}-${yearOfPurchase}-${serialNumberPadded}`
   }
 
   // Product management methods
@@ -225,6 +225,26 @@ export class ProductService {
     return this.products.filter((p) => p.categoryId === categoryId)
   }
 
+  deleteProduct(productId: string): { success: boolean; error?: string } {
+    const itemsOfProduct = this.inventoryItems.filter((item) => item.productId === productId)
+    if (itemsOfProduct.length > 0) {
+      return {
+        success: false,
+        error: `Cannot delete product. ${itemsOfProduct.length} inventory items are linked to it.`,
+      }
+    }
+
+    const productIndex = this.products.findIndex((p) => p.id === productId)
+    if (productIndex === -1) {
+      return { success: false, error: "Product not found" }
+    }
+
+    this.products.splice(productIndex, 1)
+    this.saveProducts()
+
+    return { success: true }
+  }
+
   // Inventory management methods
   addInventoryItem(data: {
     productId: string
@@ -241,7 +261,7 @@ export class ProductService {
       return { success: false, error: "Category not found" }
     }
 
-    const uniqueCode = this.generateUniqueCode(product.code)
+    const uniqueCode = this.generateUniqueCode(category.code, product.code, data.yearOfPurchase)
     const serialNumber = this.inventoryItems.filter(
       (item) => item.product.code === product.code
     ).length + 1
@@ -287,6 +307,18 @@ export class ProductService {
 
     this.inventoryItems[itemIndex].status = status
     this.inventoryItems[itemIndex].updatedAt = new Date().toISOString()
+    this.saveInventoryItems()
+
+    return { success: true }
+  }
+
+  deleteInventoryItem(itemId: string): { success: boolean; error?: string } {
+    const itemIndex = this.inventoryItems.findIndex((item) => item.id === itemId)
+    if (itemIndex === -1) {
+      return { success: false, error: "Inventory item not found" }
+    }
+
+    this.inventoryItems.splice(itemIndex, 1)
     this.saveInventoryItems()
 
     return { success: true }
@@ -367,6 +399,26 @@ export class ProductService {
     this.saveCategories()
 
     return { success: true, category }
+  }
+
+  deleteCategory(categoryId: string): { success: boolean; error?: string } {
+    const productsInCategory = this.products.filter((p) => p.categoryId === categoryId)
+    if (productsInCategory.length > 0) {
+      return {
+        success: false,
+        error: `Cannot delete category. ${productsInCategory.length} products are assigned to it.`,
+      }
+    }
+
+    const categoryIndex = this.categories.findIndex((c) => c.id === categoryId)
+    if (categoryIndex === -1) {
+      return { success: false, error: "Category not found" }
+    }
+
+    this.categories.splice(categoryIndex, 1)
+    this.saveCategories()
+
+    return { success: true }
   }
 
   getInventoryStats() {

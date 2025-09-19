@@ -19,11 +19,11 @@ export function Dashboard() {
 
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "products", label: "Products", icon: Package },
-    { id: "inventory", label: "Inventory", icon: Package },
     { id: "destinations", label: "Destinations", icon: MapPin },
+    { id: "inventory", label: "Inventory", icon: Package },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     ...(canEdit() ? [{ id: "categories", label: "Categories", icon: Settings }] : []),
+    { id: "products", label: "Products", icon: Package },
     ...(canEdit() ? [{ id: "users", label: "Users", icon: Users }] : []),
   ]
 
@@ -64,8 +64,8 @@ export function Dashboard() {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === item.id
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-sidebar-foreground hover:bg-primary/10"
                   }`}
                 >
                   <Icon className="h-5 w-5" />

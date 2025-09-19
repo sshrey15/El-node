@@ -22,7 +22,17 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, Search, Package, Upload } from "lucide-react"
+import { Plus, Search, Package, Upload, Trash2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export function ProductManagement() {
   const { canEdit } = useAuth()
@@ -30,6 +40,8 @@ export function ProductManagement() {
   const [categories, setCategories] = useState<Category[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const productService = ProductService.getInstance()
 
   useEffect(() => {
@@ -49,6 +61,18 @@ export function ProductManagement() {
       category?.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
+
+  const handleDeleteProduct = () => {
+    if (!productToDelete) return
+
+    const result = productService.deleteProduct(productToDelete.id)
+    if (result.success) {
+      loadData()
+      setProductToDelete(null)
+    } else {
+      setDeleteError(result.error || "An unknown error occurred.")
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -125,6 +149,7 @@ export function ProductManagement() {
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -149,6 +174,18 @@ export function ProductManagement() {
                         <TableCell className="text-muted-foreground">
                           {new Date(product.createdAt).toLocaleDateString()}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setDeleteError(null)
+                              setProductToDelete(product)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -158,6 +195,40 @@ export function ProductManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!productToDelete}
+        onOpenChange={() => {
+          setProductToDelete(null)
+          setDeleteError(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteError ? (
+                <span className="text-destructive">{deleteError}</span>
+              ) : (
+                <span>
+                  This action cannot be undone. This will permanently delete the
+                  <span className="font-bold"> {productToDelete?.name} </span>
+                  product.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {!deleteError && (
+              <AlertDialogAction onClick={handleDeleteProduct} className="bg-destructive hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

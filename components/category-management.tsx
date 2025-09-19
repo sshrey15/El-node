@@ -19,11 +19,23 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, Settings, Package, AlertCircle } from "lucide-react"
+import { Plus, Settings, Package, AlertCircle, Trash2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export function CategoryManagement() {
   const [categories, setCategories] = useState<Category[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const productService = ProductService.getInstance()
 
   useEffect(() => {
@@ -35,13 +47,25 @@ export function CategoryManagement() {
   }
 
   const getCategoryStats = (categoryId: string) => {
-    const products = productService.getProducts().filter((p) => p.category.id === categoryId)
-    const total = products.length
-    const active = products.filter((p) => p.status === "active").length
-    const maintenance = products.filter((p) => p.status === "maintenance").length
-    const issues = products.filter((p) => p.status === "damaged" || p.status === "missing").length
+    const items = productService.getInventoryItems().filter((item) => item.category?.id === categoryId)
+    const total = items.length
+    const active = items.filter((item) => item.status === "active").length
+    const maintenance = items.filter((item) => item.status === "maintenance").length
+    const issues = items.filter((item) => item.status === "damaged" || item.status === "missing").length
 
     return { total, active, maintenance, issues }
+  }
+
+  const handleDeleteCategory = () => {
+    if (!categoryToDelete) return
+
+    const result = productService.deleteCategory(categoryToDelete.id)
+    if (result.success) {
+      loadCategories()
+      setCategoryToDelete(null)
+    } else {
+      setDeleteError(result.error || "An unknown error occurred.")
+    }
   }
 
   return (
@@ -165,6 +189,7 @@ export function CategoryManagement() {
                     <TableHead>Issues</TableHead>
                     <TableHead>Health</TableHead>
                     <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -209,6 +234,18 @@ export function CategoryManagement() {
                         <TableCell className="text-muted-foreground">
                           {new Date(category.createdAt).toLocaleDateString()}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setDeleteError(null)
+                              setCategoryToDelete(category)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -218,6 +255,40 @@ export function CategoryManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!categoryToDelete}
+        onOpenChange={() => {
+          setCategoryToDelete(null)
+          setDeleteError(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteError ? (
+                <span className="text-destructive">{deleteError}</span>
+              ) : (
+                <span>
+                  This action cannot be undone. This will permanently delete the
+                  <span className="font-bold"> {categoryToDelete?.name} </span>
+                  category.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {!deleteError && (
+              <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Category Guidelines */}
       <Card>
