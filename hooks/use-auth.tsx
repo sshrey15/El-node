@@ -7,9 +7,11 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>
+  register: (username: string, password: string, role?: "admin" | "viewer") => Promise<{ success: boolean; error?: string }>
   logout: () => void
   canEdit: () => boolean
   hasRole: (role: "admin" | "viewer") => boolean
+  isLoading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -17,24 +19,50 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const authService = AuthService.getInstance()
 
   useEffect(() => {
     const currentUser = authService.getCurrentUser()
-    if (currentUser) {
+    if (currentUser && authService.isAuthenticated()) {
       setUser(currentUser)
       setIsAuthenticated(true)
     }
+    setIsLoading(false)
   }, [])
 
   const login = async (username: string, password: string) => {
-    const result = authService.login(username, password)
-    if (result.success && result.user) {
-      setUser(result.user)
-      setIsAuthenticated(true)
-      return { success: true }
+    setIsLoading(true)
+    try {
+      const result = await authService.login(username, password)
+      if (result.success && result.user) {
+        setUser(result.user)
+        setIsAuthenticated(true)
+        return { success: true }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      console.error("Login error:", error)
+      return { success: false, error: "An unexpected error occurred" }
+    } finally {
+      setIsLoading(false)
     }
-    return { success: false, error: result.error }
+  }
+
+  const register = async (username: string, password: string, role: "admin" | "viewer" = "viewer") => {
+    setIsLoading(true)
+    try {
+      const result = await authService.register(username, password, role)
+      if (result.success) {
+        return { success: true }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      console.error("Registration error:", error)
+      return { success: false, error: "An unexpected error occurred" }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const logout = () => {
@@ -52,9 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated,
         login,
+        register,
         logout,
         canEdit,
         hasRole,
+        isLoading,
       }}
     >
       {children}

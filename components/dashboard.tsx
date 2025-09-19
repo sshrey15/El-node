@@ -5,14 +5,16 @@ import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Package, Settings, LogOut, Users, BarChart3, MapPin, TrendingUp, AlertTriangle, Calendar, Activity } from "lucide-react"
+import { LayoutDashboard, Package, Settings, LogOut, BarChart3, MapPin, TrendingUp, AlertTriangle, Calendar, Activity, Loader2 } from "lucide-react"
 import { ProductManagement } from "@/components/product-management"
 import { InventoryManagement } from "@/components/inventory-management"
 import { CategoryManagement } from "@/components/category-management"
 import { DestinationManagement } from "@/components/destination-management"
-import { ProductService, type InventoryItem } from "@/lib/products"
+import { ApiService, type ApiInventoryItem, type ApiProduct, type ApiDestination, type ApiCategory } from "@/lib/api"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import Image from "next/image"
 import {
   PieChart,
   Pie,
@@ -38,7 +40,6 @@ export function Dashboard() {
     { id: "inventory", label: "Inventory", icon: Package },
     ...(canEdit() ? [{ id: "categories", label: "Categories", icon: Settings }] : []),
     { id: "products", label: "Products", icon: Package },
-    ...(canEdit() ? [{ id: "users", label: "Users", icon: Users }] : []),
   ]
 
   return (
@@ -47,8 +48,14 @@ export function Dashboard() {
       <header className="border-b border-border bg-card">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold text-primary">El-Node</h1>
-            <Badge variant="secondary">Inventory Management</Badge>
+            <Image
+              src="/ELIMS.png"
+              alt="ELIMS Logo"
+              width={100}
+              height={20}
+              className="h-8 w-auto"
+            />
+            
           </div>
           <div className="flex items-center space-x-4">
             <div className="text-sm">
@@ -97,7 +104,6 @@ export function Dashboard() {
           {activeTab === "inventory" && <InventoryManagement />}
           {activeTab === "destinations" && <DestinationManagement />}
           {activeTab === "categories" && canEdit() && <CategoryManagement />}
-          {activeTab === "users" && canEdit() && <div>Users section - Future enhancement</div>}
         </main>
       </div>
     </div>
@@ -113,15 +119,64 @@ const STATUS_COLORS = {
 }
 
 function DashboardOverview() {
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [inventoryItems, setInventoryItems] = useState<ApiInventoryItem[]>([])
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  const [destinations, setDestinations] = useState<ApiDestination[]>([])
+  const [categories, setCategories] = useState<ApiCategory[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
   const [timeRange, setTimeRange] = useState("all")
-  const productService = ProductService.getInstance()
+  const apiService = ApiService.getInstance()
 
   useEffect(() => {
-    setInventoryItems(productService.getInventoryItems())
+    loadData()
   }, [])
 
-  const stats = productService.getInventoryStats()
+  const loadData = async () => {
+    setIsLoading(true)
+    setError("")
+    try {
+      const [inventoryResult, productsResult, destinationsResult, categoriesResult] = await Promise.all([
+        apiService.getInventoryItems(),
+        apiService.getProducts(),
+        apiService.getDestinations(),
+        apiService.getCategories(),
+      ])
+
+      if (inventoryResult.success && inventoryResult.data) {
+        setInventoryItems(inventoryResult.data)
+      } else {
+        setError(inventoryResult.error || "Failed to load inventory data")
+      }
+
+      if (productsResult.success && productsResult.data) {
+        setProducts(productsResult.data)
+      }
+
+      if (destinationsResult.success && destinationsResult.data) {
+        setDestinations(destinationsResult.data)
+      }
+
+      if (categoriesResult.success && categoriesResult.data) {
+        setCategories(categoriesResult.data)
+      }
+    } catch (error) {
+      console.error("Error loading dashboard data:", error)
+      setError("Failed to load dashboard data")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Calculate stats from API data
+  const stats = {
+    total: inventoryItems.length,
+    active: inventoryItems.filter(item => item.status === "active").length,
+    maintenance: inventoryItems.filter(item => item.status === "maintenance").length,
+    damaged: inventoryItems.filter(item => item.status === "damaged").length,
+    discarded: inventoryItems.filter(item => item.status === "discarded").length,
+    missing: inventoryItems.filter(item => item.status === "missing").length,
+  }
 
   // Status distribution data for pie chart
   const statusData = [
@@ -134,14 +189,14 @@ function DashboardOverview() {
 
   // Category distribution
   const categoryStats = inventoryItems.reduce(
-    (acc, product) => {
-      const categoryName = product.category.name
+    (acc, item) => {
+      const categoryName = item.category.name
       if (!acc[categoryName]) {
         acc[categoryName] = { name: categoryName, count: 0, active: 0, issues: 0 }
       }
       acc[categoryName].count++
-      if (product.status === "active") acc[categoryName].active++
-      if (product.status === "damaged" || product.status === "missing") acc[categoryName].issues++
+      if (item.status === "active") acc[categoryName].active++
+      if (item.status === "damaged" || item.status === "missing") acc[categoryName].issues++
       return acc
     },
     {} as Record<string, { name: string; count: number; active: number; issues: number }>,
@@ -151,8 +206,8 @@ function DashboardOverview() {
 
   // Year-wise acquisition data
   const yearStats = inventoryItems.reduce(
-    (acc, product) => {
-      const year = product.yearOfPurchase.toString()
+    (acc, item) => {
+      const year = item.yearOfPurchase.toString()
       if (!acc[year]) {
         acc[year] = { year, count: 0 }
       }
@@ -166,6 +221,17 @@ function DashboardOverview() {
 
   // Health score calculation
   const healthScore = stats.total > 0 ? Math.round(((stats.active + stats.maintenance * 0.7) / stats.total) * 100) : 100
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading dashboard...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -186,6 +252,12 @@ function DashboardOverview() {
           </SelectContent>
         </Select>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -229,7 +301,7 @@ function DashboardOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">
-              {stats.total > 0 ? Math.round((stats.issues / stats.total) * 100) : 0}%
+              {stats.total > 0 ? Math.round(((stats.damaged + stats.missing) / stats.total) * 100) : 0}%
             </div>
             <p className="text-xs text-muted-foreground">Items with issues</p>
           </CardContent>

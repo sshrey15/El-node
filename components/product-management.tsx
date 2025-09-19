@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { ProductService, type Product, type Category } from "@/lib/products"
+import { ApiService, type ApiProduct, type ApiCategory } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, Search, Package, Upload, Trash2 } from "lucide-react"
+import { Plus, Search, Package, Upload, Trash2, Edit, Loader2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,43 +35,79 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export function ProductManagement() {
-  const { canEdit } = useAuth()
-  const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
+  const { canEdit, user } = useAuth()
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<ApiProduct | null>(null)
+  const [productToDelete, setProductToDelete] = useState<ApiProduct | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const productService = ProductService.getInstance()
+  const [error, setError] = useState("")
+  const apiService = ApiService.getInstance()
 
   useEffect(() => {
-    loadData()
+    loadProducts()
   }, [])
 
-  const loadData = () => {
-    setProducts(productService.getProducts())
-    setCategories(productService.getCategories())
+  const loadProducts = async () => {
+    setIsLoading(true)
+    setError("")
+    try {
+      const result = await apiService.getProducts()
+      if (result.success && result.data) {
+        setProducts(result.data)
+      } else {
+        setError(result.error || "Failed to load products")
+      }
+    } catch (error) {
+      console.error("Error loading products:", error)
+      setError("Failed to load products")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const filteredProducts = products.filter((product) => {
-    const category = categories.find((c) => c.id === product.categoryId)
     return (
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      category?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      product.uniqueCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.category.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
 
-  const handleDeleteProduct = () => {
+  const handleDeleteProduct = async () => {
     if (!productToDelete) return
 
-    const result = productService.deleteProduct(productToDelete.id)
-    if (result.success) {
-      loadData()
-      setProductToDelete(null)
-    } else {
-      setDeleteError(result.error || "An unknown error occurred.")
+    try {
+      const result = await apiService.deleteProduct(productToDelete.id)
+      if (result.success) {
+        await loadProducts()
+        setProductToDelete(null)
+      } else {
+        setDeleteError(result.error || "Failed to delete product")
+      }
+    } catch (error) {
+      console.error("Error deleting product:", error)
+      setDeleteError("Failed to delete product")
     }
+  }
+
+  const handleEditProduct = (product: ApiProduct) => {
+    setEditingProduct(product)
+    setIsEditDialogOpen(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading products...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -95,9 +131,8 @@ export function ProductManagement() {
                 <DialogDescription>Create a new product for your catalog</DialogDescription>
               </DialogHeader>
               <AddProductForm
-                categories={categories}
                 onSuccess={() => {
-                  loadData()
+                  loadProducts()
                   setIsAddDialogOpen(false)
                 }}
               />
@@ -105,6 +140,12 @@ export function ProductManagement() {
           </Dialog>
         )}
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Search */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -130,7 +171,7 @@ export function ProductManagement() {
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm ? "No products match your search criteria" : "No products added yet"}
+                {searchTerm ? "No products match your search criteria" : "No products found"}
               </p>
               {canEdit() && !searchTerm && (
                 <Button variant="outline" className="mt-4 bg-transparent" onClick={() => setIsAddDialogOpen(true)}>
@@ -149,60 +190,75 @@ export function ProductManagement() {
                     <TableHead>Product Code</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
+                    <TableHead>Inventory Items</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product) => {
-                    const category = categories.find((c) => c.id === product.categoryId)
-                    return (
-                      <TableRow key={product.id}>
-                        <TableCell>
-                          <div className="w-12 h-12 flex items-center justify-center bg-muted rounded-lg overflow-hidden">
-                            {product.image ? (
-                              <img
-                                src={`/${product.image}`}
-                                alt={product.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <Package className="h-6 w-6 text-muted-foreground" />
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell className="font-mono font-medium">{product.code}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{category?.name || "Unknown"}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {product.description ? (
-                            <div className="text-sm text-muted-foreground max-w-xs truncate">
-                              {product.description}
-                            </div>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="w-12 h-12 flex items-center justify-center bg-muted rounded-lg overflow-hidden">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
-                            <span className="text-muted-foreground text-sm">No description</span>
+                            <Package className="h-6 w-6 text-muted-foreground" />
                           )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(product.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setDeleteError(null)
-                              setProductToDelete(product)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell className="font-mono font-medium">{product.uniqueCode}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{product.category.name}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {product.description ? (
+                          <div className="text-sm text-muted-foreground max-w-xs truncate">
+                            {product.description}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">No description</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{product.inventoryItems.length} items</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(product.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end space-x-1">
+                          {canEdit() && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditProduct(product)}
+                                className="text-blue-600 hover:text-blue-700"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDeleteError(null)
+                                  setProductToDelete(product)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -243,60 +299,115 @@ export function ProductManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Product Dialog */}
+      {editingProduct && (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Product</DialogTitle>
+              <DialogDescription>Update product information</DialogDescription>
+            </DialogHeader>
+            <EditProductForm
+              product={editingProduct}
+              onSuccess={() => {
+                loadProducts()
+                setIsEditDialogOpen(false)
+                setEditingProduct(null)
+              }}
+              onCancel={() => {
+                setIsEditDialogOpen(false)
+                setEditingProduct(null)
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }
 
-function AddProductForm({
-  categories,
-  onSuccess,
-}: {
-  categories: Category[]
-  onSuccess: () => void
-}) {
+function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     name: "",
-    code: "",
-    categoryId: "",
-    image: "",
+    uniqueCode: "",
     description: "",
+    image: "",
+    categoryId: "",
   })
+  const [categories, setCategories] = useState<ApiCategory[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const productService = ProductService.getInstance()
+  const { user } = useAuth()
+  const apiService = ApiService.getInstance()
+
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  const loadCategories = async () => {
+    setCategoriesLoading(true)
+    try {
+      const result = await apiService.getCategories()
+      if (result.success && result.data) {
+        setCategories(result.data)
+      } else {
+        setError(result.error || "Failed to load categories")
+      }
+    } catch (error) {
+      console.error("Error loading categories:", error)
+      setError("Failed to load categories")
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setIsLoading(true)
 
-    if (!formData.name || !formData.code || !formData.categoryId) {
+    if (!formData.name.trim() || !formData.uniqueCode.trim() || !formData.categoryId) {
       setError("Please fill in all required fields")
       setIsLoading(false)
       return
     }
 
-    const result = productService.addProduct({
-      name: formData.name,
-      code: formData.code.toUpperCase(),
-      categoryId: formData.categoryId,
-      image: formData.image || undefined,
-      description: formData.description || undefined,
-    })
-
-    if (result.success) {
-      onSuccess()
-      setFormData({
-        name: "",
-        code: "",
-        categoryId: "",
-        image: "",
-        description: "",
-      })
-    } else {
-      setError(result.error || "Failed to add product")
+    if (!user) {
+      setError("User not authenticated")
+      setIsLoading(false)
+      return
     }
-    setIsLoading(false)
+
+    try {
+      const result = await apiService.createProduct({
+        name: formData.name.trim(),
+        uniqueCode: formData.uniqueCode.trim().toUpperCase(),
+        description: formData.description.trim(),
+        image: formData.image.trim(),
+        categoryId: formData.categoryId,
+        userId: user.id,
+      })
+
+      if (result.success) {
+        onSuccess()
+        setFormData({
+          name: "",
+          uniqueCode: "",
+          description: "",
+          image: "",
+          categoryId: "",
+        })
+      } else {
+        setError(result.error || "Failed to create product")
+      }
+    } catch (error) {
+      console.error("Error creating product:", error)
+      setError("Failed to create product")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -307,32 +418,36 @@ function AddProductForm({
           id="name"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="e.g., Office Chair"
+          placeholder="e.g., DELL XPS"
           required
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="code">Product Code *</Label>
+        <Label htmlFor="uniqueCode">Product Code *</Label>
         <Input
-          id="code"
-          value={formData.code}
-          onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-          placeholder="e.g., CCH"
-          maxLength={5}
+          id="uniqueCode"
+          value={formData.uniqueCode}
+          onChange={(e) => setFormData({ ...formData, uniqueCode: e.target.value.toUpperCase() })}
+          placeholder="e.g., DEL"
+          maxLength={10}
           className="font-mono"
           required
         />
         <p className="text-xs text-muted-foreground">
-          Short code for this product (max 5 characters). This will be used in inventory codes.
+          Short code for this product. This will be used in inventory codes.
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="category">Category *</Label>
-        <Select value={formData.categoryId} onValueChange={(value) => setFormData({ ...formData, categoryId: value })}>
+        <Label htmlFor="categoryId">Category *</Label>
+        <Select 
+          value={formData.categoryId} 
+          onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
+          disabled={categoriesLoading}
+        >
           <SelectTrigger>
-            <SelectValue placeholder="Select category" />
+            <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} />
           </SelectTrigger>
           <SelectContent>
             {categories.map((category) => (
@@ -342,27 +457,20 @@ function AddProductForm({
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          Select the category for this product
+        </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="image">Image Upload</Label>
-        <div className="flex items-center space-x-2">
-          <Input
-            id="image"
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) {
-                // In a real app, you'd upload this to a server
-                setFormData({ ...formData, image: file.name })
-              }
-            }}
-            className="flex-1"
-          />
-          <Upload className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <p className="text-xs text-muted-foreground">Upload an image for this product (optional)</p>
+        <Label htmlFor="image">Image URL</Label>
+        <Input
+          id="image"
+          value={formData.image}
+          onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+          placeholder="https://example.com/image.jpg"
+        />
+        <p className="text-xs text-muted-foreground">Optional image URL for this product</p>
       </div>
 
       <div className="space-y-2">
@@ -382,9 +490,113 @@ function AddProductForm({
         </Alert>
       )}
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? "Adding Product..." : "Save Product"}
+      <Button type="submit" className="w-full" disabled={isLoading || categoriesLoading}>
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Creating Product...
+          </>
+        ) : (
+          "Save Product"
+        )}
       </Button>
+    </form>
+  )
+}
+
+function EditProductForm({
+  product,
+  onSuccess,
+  onCancel,
+}: {
+  product: ApiProduct
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const [formData, setFormData] = useState({
+    name: product.name,
+    description: product.description,
+  })
+
+  const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const apiService = ApiService.getInstance()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setIsLoading(true)
+
+    if (!formData.name.trim()) {
+      setError("Please enter a product name")
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const result = await apiService.updateProduct(product.id, {
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+      })
+
+      if (result.success) {
+        onSuccess()
+      } else {
+        setError(result.error || "Failed to update product")
+      }
+    } catch (error) {
+      console.error("Error updating product:", error)
+      setError("Failed to update product")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="edit-name">Product Name *</Label>
+        <Input
+          id="edit-name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="e.g., DELL XPS"
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="edit-description">Description</Label>
+        <Textarea
+          id="edit-description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Detailed description of the product"
+          rows={3}
+        />
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex space-x-2">
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+          Cancel
+        </Button>
+        <Button type="submit" className="flex-1" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            "Update Product"
+          )}
+        </Button>
+      </div>
     </form>
   )
 }

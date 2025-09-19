@@ -10,32 +10,21 @@ export interface AuthState {
   isAuthenticated: boolean
 }
 
-// Default admin user for demo purposes
-const DEFAULT_USERS: User[] = [
-  {
-    id: "1",
-    username: "admin",
-    role: "admin",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    username: "viewer",
-    role: "viewer",
-    createdAt: new Date().toISOString(),
-  },
-]
+const API_BASE_URL = "https://el-node-backend.vercel.app/api"
 
 export class AuthService {
   private static instance: AuthService
   private currentUser: User | null = null
+  private authToken: string | null = null
 
   private constructor() {
-    // Initialize with stored user if available
+    // Initialize with stored user and token if available
     if (typeof window !== "undefined") {
       const storedUser = localStorage.getItem("el-node-user")
-      if (storedUser) {
+      const storedToken = localStorage.getItem("el-node-token")
+      if (storedUser && storedToken) {
         this.currentUser = JSON.parse(storedUser)
+        this.authToken = storedToken
       }
     }
   }
@@ -47,31 +36,81 @@ export class AuthService {
     return AuthService.instance
   }
 
-  login(username: string, password: string): { success: boolean; user?: User; error?: string } {
-    // Simple authentication - in production, this would be server-side
-    const user = DEFAULT_USERS.find((u) => u.username === username)
+  async login(username: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      })
 
-    if (!user) {
-      return { success: false, error: "User not found" }
+      const data = await response.json()
+
+      if (response.ok) {
+        // Create user object from API response
+        const user: User = {
+          id: data.user?.id || data.id || username,
+          username: data.user?.username || data.username || username,
+          role: data.user?.role || data.role || "viewer",
+          createdAt: data.user?.createdAt || data.createdAt || new Date().toISOString(),
+        }
+
+        this.currentUser = user
+        this.authToken = data.token || "authenticated"
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem("el-node-user", JSON.stringify(user))
+          localStorage.setItem("el-node-token", this.authToken!)
+        }
+
+        return { success: true, user }
+      } else {
+        return { success: false, error: data.message || data.error || "Login failed" }
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      return { success: false, error: "Network error. Please check if the server is running." }
     }
+  }
 
-    // Simple password check (admin/admin, viewer/viewer)
-    if (password !== username) {
-      return { success: false, error: "Invalid password" }
+  async register(username: string, password: string, role: "admin" | "viewer" = "viewer"): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password, role }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        const user: User = {
+          id: data.user?.id || data.id || username,
+          username: data.user?.username || data.username || username,
+          role: data.user?.role || data.role || role,
+          createdAt: data.user?.createdAt || data.createdAt || new Date().toISOString(),
+        }
+
+        return { success: true, user }
+      } else {
+        return { success: false, error: data.message || data.error || "Registration failed" }
+      }
+    } catch (error) {
+      console.error("Registration error:", error)
+      return { success: false, error: "Network error. Please check if the server is running." }
     }
-
-    this.currentUser = user
-    if (typeof window !== "undefined") {
-      localStorage.setItem("el-node-user", JSON.stringify(user))
-    }
-
-    return { success: true, user }
   }
 
   logout(): void {
     this.currentUser = null
+    this.authToken = null
     if (typeof window !== "undefined") {
       localStorage.removeItem("el-node-user")
+      localStorage.removeItem("el-node-token")
     }
   }
 
@@ -79,8 +118,12 @@ export class AuthService {
     return this.currentUser
   }
 
+  getAuthToken(): string | null {
+    return this.authToken
+  }
+
   isAuthenticated(): boolean {
-    return this.currentUser !== null
+    return this.currentUser !== null && this.authToken !== null
   }
 
   hasRole(role: "admin" | "viewer"): boolean {
