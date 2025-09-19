@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { LayoutDashboard, Package, Settings, LogOut, Users, BarChart3, MapPin } from "lucide-react"
 import { ProductManagement } from "@/components/product-management"
+import { InventoryManagement } from "@/components/inventory-management"
 import { Analytics } from "@/components/analytics"
 import { CategoryManagement } from "@/components/category-management"
 import { DestinationManagement } from "@/components/destination-management"
@@ -19,6 +20,7 @@ export function Dashboard() {
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "products", label: "Products", icon: Package },
+    { id: "inventory", label: "Inventory", icon: Package },
     { id: "destinations", label: "Destinations", icon: MapPin },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     ...(canEdit() ? [{ id: "categories", label: "Categories", icon: Settings }] : []),
@@ -78,6 +80,7 @@ export function Dashboard() {
         <main className="flex-1 p-6">
           {activeTab === "dashboard" && <DashboardOverview />}
           {activeTab === "products" && <ProductManagement />}
+          {activeTab === "inventory" && <InventoryManagement />}
           {activeTab === "destinations" && <DestinationManagement />}
           {activeTab === "analytics" && <Analytics />}
           {activeTab === "categories" && canEdit() && <CategoryManagement />}
@@ -98,7 +101,7 @@ function DashboardOverview() {
 
   useEffect(() => {
     const productService = ProductService.getInstance()
-    setStats(productService.getProductStats())
+    setStats(productService.getInventoryStats())
   }, [])
 
   return (
@@ -116,7 +119,7 @@ function DashboardOverview() {
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{stats.total}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.total === 0 ? "No products added yet" : "Products in inventory"}
+              {stats.total === 0 ? "No inventory items added yet" : "Items in inventory"}
             </p>
           </CardContent>
         </Card>
@@ -127,7 +130,7 @@ function DashboardOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-chart-1">{stats.active}</div>
-            <p className="text-xs text-muted-foreground">Products in use</p>
+            <p className="text-xs text-muted-foreground">Items in use</p>
           </CardContent>
         </Card>
 
@@ -147,7 +150,7 @@ function DashboardOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{stats.issues}</div>
-            <p className="text-xs text-muted-foreground">Damaged/Missing</p>
+            <p className="text-xs text-muted-foreground">Items with issues</p>
           </CardContent>
         </Card>
       </div>
@@ -163,8 +166,8 @@ function DashboardOverview() {
               <span className="text-sm font-medium text-primary">1</span>
             </div>
             <div>
-              <p className="font-medium">Define Categories</p>
-              <p className="text-sm text-muted-foreground">Set up product categories with short codes</p>
+              <p className="font-medium">Add Products</p>
+              <p className="text-sm text-muted-foreground">Define your product catalog with categories</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -172,8 +175,8 @@ function DashboardOverview() {
               <span className="text-sm font-medium text-muted-foreground">2</span>
             </div>
             <div>
-              <p className="font-medium text-muted-foreground">Add Products</p>
-              <p className="text-sm text-muted-foreground">Start adding products with unique codes</p>
+              <p className="font-medium text-muted-foreground">Add to Inventory</p>
+              <p className="text-sm text-muted-foreground">Add product instances to your inventory</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -182,7 +185,7 @@ function DashboardOverview() {
             </div>
             <div>
               <p className="font-medium text-muted-foreground">Track Status</p>
-              <p className="text-sm text-muted-foreground">Monitor product status and maintenance</p>
+              <p className="text-sm text-muted-foreground">Monitor inventory status and maintenance</p>
             </div>
           </div>
         </CardContent>

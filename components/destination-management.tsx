@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { ProductService, type Destination, type Product } from "@/lib/products"
+import { ProductService, type Destination, type InventoryItem } from "@/lib/products"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,7 +36,7 @@ export function DestinationManagement() {
   const { canEdit } = useAuth()
   const [destinationStats, setDestinationStats] = useState<any[]>([])
   const [destinations, setDestinations] = useState<Destination[]>([])
-  const [products, setProducts] = useState<Product[]>([])
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedDestination, setSelectedDestination] = useState<string | null>(null)
   const productService = ProductService.getInstance()
@@ -48,7 +48,7 @@ export function DestinationManagement() {
   const loadData = () => {
     setDestinationStats(productService.getDestinationStats())
     setDestinations(productService.getDestinations())
-    setProducts(productService.getProducts())
+    setInventoryItems(productService.getInventoryItems())
   }
 
   const handleDeleteDestination = (destinationId: string) => {
@@ -122,14 +122,14 @@ export function DestinationManagement() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Package className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Total Products</span>
+                  <span className="text-sm font-medium">Total Items</span>
                 </div>
                 <Badge variant="secondary" className="text-lg font-bold">
-                  {stat.totalProducts}
+                  {stat.totalItems}
                 </Badge>
               </div>
 
-              {stat.totalProducts > 0 && (
+              {stat.totalItems > 0 && (
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-muted-foreground">Status Breakdown</div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -155,7 +155,7 @@ export function DestinationManagement() {
                 onClick={() => setSelectedDestination(stat.destination.id)}
               >
                 <Eye className="h-4 w-4 mr-2" />
-                View Products
+                View Items
               </Button>
             </CardContent>
           </Card>
@@ -183,8 +183,8 @@ export function DestinationManagement() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Products in {selectedDestinationData.destination.name}</CardTitle>
-                <CardDescription>{selectedDestinationData.totalProducts} products in this destination</CardDescription>
+                <CardTitle>Items in {selectedDestinationData.destination.name}</CardTitle>
+                <CardDescription>{selectedDestinationData.totalItems} items in this destination</CardDescription>
               </div>
               <Button variant="outline" onClick={() => setSelectedDestination(null)}>
                 Close
@@ -192,10 +192,10 @@ export function DestinationManagement() {
             </div>
           </CardHeader>
           <CardContent>
-            {selectedDestinationData.products.length === 0 ? (
+            {selectedDestinationData.items.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No products in this destination</p>
+                <p className="text-muted-foreground">No items in this destination</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -203,39 +203,39 @@ export function DestinationManagement() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Unique Code</TableHead>
-                      <TableHead>Product Name</TableHead>
+                      <TableHead>Item Name</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Status</TableHead>
                       {canEdit() && <TableHead>Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedDestinationData.products.map((product: Product) => (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-mono font-medium">{product.uniqueCode}</TableCell>
+                    {selectedDestinationData.items.map((item: InventoryItem) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono font-medium">{item.uniqueCode}</TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{product.name}</div>
-                            {product.description && (
-                              <div className="text-sm text-muted-foreground">{product.description}</div>
+                            <div className="font-medium">{item.product.name}</div>
+                            {item.product.description && (
+                              <div className="text-sm text-muted-foreground">{item.product.description}</div>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{product.category.name}</Badge>
+                          <Badge variant="outline">{item.category.name}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={STATUS_COLORS[product.status]}>
-                            {product.status}
+                          <Badge variant="outline" className={STATUS_COLORS[item.status]}>
+                            {item.status}
                           </Badge>
                         </TableCell>
                         {canEdit() && (
                           <TableCell>
                             <DestinationUpdateDropdown
-                              currentDestinationId={product.destinationId}
+                              currentDestinationId={item.destinationId}
                               destinations={destinations}
                               onDestinationChange={(destinationId) => {
-                                productService.updateProductDestination(product.id, destinationId)
+                                productService.updateInventoryItemDestination(item.id, destinationId)
                                 loadData()
                               }}
                             />
@@ -258,14 +258,8 @@ function AddDestinationForm({ onSuccess }: { onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    productId: "",
   })
-  const [products, setProducts] = useState<Product[]>([])
 
-  useEffect(() => {
-    const productService = ProductService.getInstance()
-    setProducts(productService.getProducts())
-  }, [])
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const productService = ProductService.getInstance()
@@ -285,7 +279,7 @@ function AddDestinationForm({ onSuccess }: { onSuccess: () => void }) {
 
     if (result.success) {
       onSuccess()
-      setFormData({ name: "", description: "", productId: "" })
+      setFormData({ name: "", description: "" })
     } else {
       setError(result.error || "Failed to add destination")
     }
@@ -314,30 +308,6 @@ function AddDestinationForm({ onSuccess }: { onSuccess: () => void }) {
           placeholder="Brief description of this location"
           rows={3}
         />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="products">Assign Product to Room</Label>
-        <Select
-          value={formData.productId}
-          onValueChange={(value) =>
-            setFormData({
-              ...formData,
-              productId: value,
-            })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select product" />
-          </SelectTrigger>
-          <SelectContent>
-            {products.map((product) => (
-              <SelectItem key={product.id} value={product.id}>
-                {product.name} ({product.uniqueCode})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {error && (
