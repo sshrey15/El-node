@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5000/api"
+const API_BASE_URL = "https://el-node-backend.vercel.app/api"
 
 export interface ApiDestination {
   id: string
@@ -183,7 +183,7 @@ export class ApiService {
   // GET /api/destinations
   async getDestinations(): Promise<{ success: boolean; data?: ApiDestination[]; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/destinations`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/destinations`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -206,7 +206,7 @@ export class ApiService {
   // POST /api/destinations
   async createDestination(destination: CreateDestinationRequest): Promise<{ success: boolean; data?: ApiDestination; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/destinations`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/destinations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -230,7 +230,7 @@ export class ApiService {
   // PUT /api/destinations/:id
   async updateDestination(id: string, destination: UpdateDestinationRequest): Promise<{ success: boolean; data?: ApiDestination; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/destinations/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/destinations/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -254,7 +254,7 @@ export class ApiService {
   // DELETE /api/destinations/:id
   async deleteDestination(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/destinations/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/destinations/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -276,7 +276,7 @@ export class ApiService {
   // GET /api/products
   async getProducts(): Promise<{ success: boolean; data?: ApiProduct[]; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/products`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -299,7 +299,7 @@ export class ApiService {
   // POST /api/products
   async createProduct(product: CreateProductRequest): Promise<{ success: boolean; data?: ApiProduct; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/products`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -323,7 +323,7 @@ export class ApiService {
   // PUT /api/products/:id
   async updateProduct(id: string, product: UpdateProductRequest): Promise<{ success: boolean; data?: ApiProduct; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/products/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -347,7 +347,7 @@ export class ApiService {
   // DELETE /api/products/:id
   async deleteProduct(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/products/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -369,7 +369,7 @@ export class ApiService {
   // GET /api/categories
   async getCategories(): Promise<{ success: boolean; data?: ApiCategory[]; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/categories`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/categories`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -392,7 +392,7 @@ export class ApiService {
   // POST /api/categories
   async createCategory(category: CreateCategoryRequest): Promise<{ success: boolean; data?: ApiCategory; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/categories`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/categories`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -416,7 +416,7 @@ export class ApiService {
   // PUT /api/categories/:id
   async updateCategory(id: string, category: UpdateCategoryRequest): Promise<{ success: boolean; data?: ApiCategory; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/categories/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -440,7 +440,7 @@ export class ApiService {
   // DELETE /api/categories/:id
   async deleteCategory(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/categories/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -462,7 +462,7 @@ export class ApiService {
   // GET /api/inventory
   async getInventoryItems(): Promise<{ success: boolean; data?: ApiInventoryItem[]; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/inventory`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -485,7 +485,7 @@ export class ApiService {
   // POST /api/inventory
   async createInventoryItem(item: CreateInventoryItemRequest): Promise<{ success: boolean; data?: ApiInventoryItem; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/inventory`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -509,7 +509,7 @@ export class ApiService {
   // PUT /api/inventory/:id
   async updateInventoryItem(id: string, item: UpdateInventoryItemRequest): Promise<{ success: boolean; data?: ApiInventoryItem; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/inventory/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -533,7 +533,7 @@ export class ApiService {
   // DELETE /api/inventory/:id
   async deleteInventoryItem(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory/${id}`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/inventory/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

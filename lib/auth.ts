@@ -10,7 +10,7 @@ export interface AuthState {
   isAuthenticated: boolean
 }
 
-const API_BASE_URL = "https://el-node-backend.vercel.app/api"
+
 
 export class AuthService {
   private static instance: AuthService
@@ -38,7 +38,7 @@ export class AuthService {
 
   async login(username: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/login`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/users/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -77,7 +77,7 @@ export class AuthService {
 
   async register(username: string, password: string, role: "admin" | "viewer" = "viewer"): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/register`, {
+      const response = await fetch(`https://el-node-backend.vercel.app/api/users/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

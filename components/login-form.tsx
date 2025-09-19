@@ -158,17 +158,7 @@ export function LoginForm() {
             </TabsContent>
           </Tabs>
           
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground mb-2">API Endpoints:</p>
-            <div className="text-xs space-y-1">
-              <div>
-                <strong>Login:</strong> POST http://localhost:5000/api/users/login
-              </div>
-              <div>
-                <strong>Register:</strong> POST http://localhost:5000/api/users/register
-              </div>
-            </div>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
