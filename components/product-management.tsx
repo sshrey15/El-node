@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { ProductService, type Product, type Category, type Destination } from "@/lib/products"
+import { ProductService, type Product, type Category } from "@/lib/products"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,23 +22,13 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, Search, Filter } from "lucide-react"
-
-const STATUS_COLORS = {
-  active: "bg-green-100 text-green-800 border-green-200",
-  maintenance: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  damaged: "bg-red-100 text-red-800 border-red-200",
-  discarded: "bg-gray-100 text-gray-800 border-gray-200",
-  missing: "bg-purple-100 text-purple-800 border-purple-200",
-}
+import { Plus, Search, Package, Upload } from "lucide-react"
 
 export function ProductManagement() {
   const { canEdit } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [destinations, setDestinations] = useState<Destination[]>([])
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const productService = ProductService.getInstance()
 
@@ -49,40 +39,23 @@ export function ProductManagement() {
   const loadData = () => {
     setProducts(productService.getProducts())
     setCategories(productService.getCategories())
-    setDestinations(productService.getDestinations())
   }
 
   const filteredProducts = products.filter((product) => {
-    const matchesSearch =
+    const category = categories.find((c) => c.id === product.categoryId)
+    return (
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.uniqueCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.name.toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesStatus = statusFilter === "all" || product.status === statusFilter
-
-    return matchesSearch && matchesStatus
+      product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      category?.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   })
-
-  const handleStatusUpdate = (productId: string, newStatus: Product["status"]) => {
-    const result = productService.updateProductStatus(productId, newStatus)
-    if (result.success) {
-      loadData()
-    }
-  }
-
-  const handleDestinationUpdate = (productId: string, destinationId?: string) => {
-    const result = productService.updateProductDestination(productId, destinationId)
-    if (result.success) {
-      loadData()
-    }
-  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-foreground">Product Management</h2>
-          <p className="text-muted-foreground">Manage your inventory products and track their status</p>
+          <p className="text-muted-foreground">Manage your product catalog and subcategories</p>
         </div>
         {canEdit() && (
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -95,11 +68,10 @@ export function ProductManagement() {
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Add New Product</DialogTitle>
-                <DialogDescription>Create a new product with a unique EHS code</DialogDescription>
+                <DialogDescription>Create a new product for your catalog</DialogDescription>
               </DialogHeader>
               <AddProductForm
                 categories={categories}
-                destinations={destinations}
                 onSuccess={() => {
                   loadData()
                   setIsAddDialogOpen(false)
@@ -110,7 +82,7 @@ export function ProductManagement() {
         )}
       </div>
 
-      {/* Search and Filter */}
+      {/* Search */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -121,37 +93,22 @@ export function ProductManagement() {
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="maintenance">Maintenance</SelectItem>
-            <SelectItem value="damaged">Damaged</SelectItem>
-            <SelectItem value="discarded">Discarded</SelectItem>
-            <SelectItem value="missing">Missing</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Products Table */}
       <Card>
         <CardHeader>
           <CardTitle>Products ({filteredProducts.length})</CardTitle>
-          <CardDescription>All products with their unique EHS codes and current status</CardDescription>
+          <CardDescription>All products in your catalog</CardDescription>
         </CardHeader>
         <CardContent>
           {filteredProducts.length === 0 ? (
             <div className="text-center py-8">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm || statusFilter !== "all"
-                  ? "No products match your search criteria"
-                  : "No products added yet"}
+                {searchTerm ? "No products match your search criteria" : "No products added yet"}
               </p>
-              {canEdit() && !searchTerm && statusFilter === "all" && (
+              {canEdit() && !searchTerm && (
                 <Button variant="outline" className="mt-4 bg-transparent" onClick={() => setIsAddDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Product
@@ -163,62 +120,35 @@ export function ProductManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Unique Code</TableHead>
                     <TableHead>Product Name</TableHead>
+                    <TableHead>Product Code</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead>Destination</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Status</TableHead>
-                    {canEdit() && <TableHead>Actions</TableHead>}
+                    <TableHead>Description</TableHead>
+                    <TableHead>Created</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProducts.map((product) => {
-                    const destination = destinations.find((d) => d.id === product.destinationId)
+                    const category = categories.find((c) => c.id === product.categoryId)
                     return (
                       <TableRow key={product.id}>
-                        <TableCell className="font-mono font-medium">{product.uniqueCode}</TableCell>
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell className="font-mono font-medium">{product.code}</TableCell>
                         <TableCell>
-                          <div>
-                            <div className="font-medium">{product.name}</div>
-                            {product.description && (
-                              <div className="text-sm text-muted-foreground">{product.description}</div>
-                            )}
-                          </div>
+                          <Badge variant="outline">{category?.name || "Unknown"}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{product.category.name}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {destination ? (
-                            <Badge variant="secondary">{destination.name}</Badge>
+                          {product.description ? (
+                            <div className="text-sm text-muted-foreground max-w-xs truncate">
+                              {product.description}
+                            </div>
                           ) : (
-                            <span className="text-muted-foreground text-sm">No location</span>
+                            <span className="text-muted-foreground text-sm">No description</span>
                           )}
                         </TableCell>
-                        <TableCell>{product.yearOfPurchase}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={STATUS_COLORS[product.status]}>
-                            {product.status}
-                          </Badge>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(product.createdAt).toLocaleDateString()}
                         </TableCell>
-                        {canEdit() && (
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <StatusUpdateDropdown
-                                currentStatus={product.status}
-                                onStatusChange={(status) => handleStatusUpdate(product.id, status)}
-                              />
-                              <DestinationUpdateDropdown
-                                currentDestinationId={product.destinationId}
-                                destinations={destinations}
-                                onDestinationChange={(destinationId) =>
-                                  handleDestinationUpdate(product.id, destinationId)
-                                }
-                              />
-                            </div>
-                          </TableCell>
-                        )}
                       </TableRow>
                     )
                   })}
@@ -234,20 +164,17 @@ export function ProductManagement() {
 
 function AddProductForm({
   categories,
-  destinations,
   onSuccess,
 }: {
   categories: Category[]
-  destinations: Destination[]
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
     name: "",
     code: "",
     categoryId: "",
-    yearOfPurchase: new Date().getFullYear(),
+    image: "",
     description: "",
-    destinationId: "",
   })
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -268,9 +195,8 @@ function AddProductForm({
       name: formData.name,
       code: formData.code.toUpperCase(),
       categoryId: formData.categoryId,
-      yearOfPurchase: formData.yearOfPurchase,
-      description: formData.description,
-      destinationId: formData.destinationId || undefined,
+      image: formData.image || undefined,
+      description: formData.description || undefined,
     })
 
     if (result.success) {
@@ -279,9 +205,8 @@ function AddProductForm({
         name: "",
         code: "",
         categoryId: "",
-        yearOfPurchase: new Date().getFullYear(),
+        image: "",
         description: "",
-        destinationId: "",
       })
     } else {
       setError(result.error || "Failed to add product")
@@ -297,7 +222,7 @@ function AddProductForm({
           id="name"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="e.g., Office Table"
+          placeholder="e.g., Office Chair"
           required
         />
       </div>
@@ -308,11 +233,14 @@ function AddProductForm({
           id="code"
           value={formData.code}
           onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-          placeholder="e.g., TAB"
+          placeholder="e.g., CCH"
           maxLength={5}
+          className="font-mono"
           required
         />
-        <p className="text-xs text-muted-foreground">Short code for this product type (max 5 characters)</p>
+        <p className="text-xs text-muted-foreground">
+          Short code for this product (max 5 characters). This will be used in inventory codes.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -332,44 +260,33 @@ function AddProductForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="destination">Destination (Optional)</Label>
-        <Select
-          value={formData.destinationId || "none"}
-          onValueChange={(value) => setFormData({ ...formData, destinationId: value === "none" ? "" : value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select destination" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No destination</SelectItem>
-            {destinations.map((destination) => (
-              <SelectItem key={destination.id} value={destination.id}>
-                {destination.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="image">Image Upload</Label>
+        <div className="flex items-center space-x-2">
+          <Input
+            id="image"
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) {
+                // In a real app, you'd upload this to a server
+                setFormData({ ...formData, image: file.name })
+              }
+            }}
+            className="flex-1"
+          />
+          <Upload className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <p className="text-xs text-muted-foreground">Upload an image for this product (optional)</p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="year">Year of Purchase</Label>
-        <Input
-          id="year"
-          type="number"
-          value={formData.yearOfPurchase}
-          onChange={(e) => setFormData({ ...formData, yearOfPurchase: Number.parseInt(e.target.value) })}
-          min="2000"
-          max={new Date().getFullYear() + 1}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="description">Description (Optional)</Label>
+        <Label htmlFor="description">Description</Label>
         <Textarea
           id="description"
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Additional details about the product"
+          placeholder="Detailed description of the product"
           rows={3}
         />
       </div>
@@ -381,77 +298,8 @@ function AddProductForm({
       )}
 
       <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? "Adding Product..." : "Add Product"}
+        {isLoading ? "Adding Product..." : "Save Product"}
       </Button>
     </form>
-  )
-}
-
-function StatusUpdateDropdown({
-  currentStatus,
-  onStatusChange,
-}: {
-  currentStatus: Product["status"]
-  onStatusChange: (status: Product["status"]) => void
-}) {
-  const statuses: Product["status"][] = ["active", "maintenance", "damaged", "discarded", "missing"]
-
-  return (
-    <Select value={currentStatus} onValueChange={onStatusChange}>
-      <SelectTrigger className="w-32">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {statuses.map((status) => (
-          <SelectItem key={status} value={status}>
-            <div className="flex items-center">
-              <div
-                className={`w-2 h-2 rounded-full mr-2 ${
-                  status === "active"
-                    ? "bg-green-500"
-                    : status === "maintenance"
-                      ? "bg-yellow-500"
-                      : status === "damaged"
-                        ? "bg-red-500"
-                        : status === "discarded"
-                          ? "bg-gray-500"
-                          : "bg-purple-500"
-                }`}
-              />
-              {status}
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
-function DestinationUpdateDropdown({
-  currentDestinationId,
-  destinations,
-  onDestinationChange,
-}: {
-  currentDestinationId?: string
-  destinations: Destination[]
-  onDestinationChange: (destinationId?: string) => void
-}) {
-  return (
-    <Select
-      value={currentDestinationId || "none"}
-      onValueChange={(value) => onDestinationChange(value === "none" ? undefined : value)}
-    >
-      <SelectTrigger className="w-32">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="none">No Location</SelectItem>
-        {destinations.map((destination) => (
-          <SelectItem key={destination.id} value={destination.id}>
-            {destination.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   )
 }

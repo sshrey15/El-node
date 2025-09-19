@@ -5,6 +5,17 @@ export interface Category {
   createdAt: string
 }
 
+export interface Product {
+  id: string
+  name: string
+  code: string // Short code like "CCH" for Chair
+  categoryId: string
+  image?: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Destination {
   id: string
   name: string
@@ -12,16 +23,15 @@ export interface Destination {
   createdAt: string
 }
 
-export interface Product {
+export interface InventoryItem {
   id: string
-  name: string
-  code: string // Short code like "TAB" for Table
+  productId: string
+  product: Product
   category: Category
-  uniqueCode: string // Full code like "EHS-FUR-TAB-24-0003"
+  uniqueCode: string // Full code like "EHS-CCH-0001"
   status: "active" | "maintenance" | "damaged" | "discarded" | "missing"
   yearOfPurchase: number
-  unitNumber: number
-  description?: string
+  serialNumber: number
   destinationId?: string
   createdAt: string
   updatedAt: string
@@ -49,6 +59,27 @@ const DEFAULT_CATEGORIES: Category[] = [
   },
 ]
 
+const DEFAULT_PRODUCTS: Product[] = [
+  {
+    id: "1",
+    name: "Office Chair",
+    code: "CCH",
+    categoryId: "1",
+    description: "Ergonomic office chair",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    name: "Desk",
+    code: "DSK",
+    categoryId: "1",
+    description: "Office desk",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]
+
 const DEFAULT_DESTINATIONS: Destination[] = [
   {
     id: "1",
@@ -72,25 +103,34 @@ const DEFAULT_DESTINATIONS: Destination[] = [
 
 export class ProductService {
   private static instance: ProductService
-  private products: Product[] = []
+  private products: Product[] = DEFAULT_PRODUCTS
+  private inventoryItems: InventoryItem[] = []
   private categories: Category[] = DEFAULT_CATEGORIES
   private destinations: Destination[] = DEFAULT_DESTINATIONS
 
   private constructor() {
     if (typeof window !== "undefined") {
       const storedProducts = localStorage.getItem("el-node-products")
+      const storedInventoryItems = localStorage.getItem("el-node-inventory-items")
       const storedCategories = localStorage.getItem("el-node-categories")
       const storedDestinations = localStorage.getItem("el-node-destinations")
 
       if (storedProducts) {
         this.products = JSON.parse(storedProducts)
+      } else {
+        localStorage.setItem("el-node-products", JSON.stringify(DEFAULT_PRODUCTS))
       }
+      
+      if (storedInventoryItems) {
+        this.inventoryItems = JSON.parse(storedInventoryItems)
+      }
+      
       if (storedCategories) {
         this.categories = JSON.parse(storedCategories)
       } else {
-        // Save default categories
         localStorage.setItem("el-node-categories", JSON.stringify(DEFAULT_CATEGORIES))
       }
+      
       if (storedDestinations) {
         this.destinations = JSON.parse(storedDestinations)
       } else {
@@ -112,6 +152,12 @@ export class ProductService {
     }
   }
 
+  private saveInventoryItems(): void {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("el-node-inventory-items", JSON.stringify(this.inventoryItems))
+    }
+  }
+
   private saveCategories(): void {
     if (typeof window !== "undefined") {
       localStorage.setItem("el-node-categories", JSON.stringify(this.categories))
@@ -124,54 +170,43 @@ export class ProductService {
     }
   }
 
-  private generateUniqueCode(category: Category, productCode: string, year: number): string {
-    // Find the next unit number for this combination
-    const existingProducts = this.products.filter(
-      (p) => p.category.code === category.code && p.code === productCode && p.yearOfPurchase === year,
+  private generateUniqueCode(productCode: string): string {
+    // Find the next serial number for this product code
+    const existingItems = this.inventoryItems.filter(
+      (item) => item.product.code === productCode
     )
 
-    const nextUnitNumber = existingProducts.length + 1
-    const unitNumberPadded = nextUnitNumber.toString().padStart(4, "0")
-    const yearShort = year.toString().slice(-2)
+    const nextSerialNumber = existingItems.length + 1
+    const serialNumberPadded = nextSerialNumber.toString().padStart(4, "0")
 
-    return `EHS-${category.code}-${productCode}-${yearShort}-${unitNumberPadded}`
+    return `EHS-${productCode}-${serialNumberPadded}`
   }
 
+  // Product management methods
   addProduct(data: {
     name: string
     code: string
     categoryId: string
-    yearOfPurchase: number
+    image?: string
     description?: string
-    destinationId?: string
   }): { success: boolean; product?: Product; error?: string } {
     const category = this.categories.find((c) => c.id === data.categoryId)
     if (!category) {
       return { success: false, error: "Category not found" }
     }
 
-    // Check if product code already exists for this category
-    const existingProduct = this.products.find((p) => p.code === data.code && p.category.id === data.categoryId)
-
-    const unitNumber = existingProduct
-      ? this.products.filter(
-          (p) => p.code === data.code && p.category.id === data.categoryId && p.yearOfPurchase === data.yearOfPurchase,
-        ).length + 1
-      : 1
-
-    const uniqueCode = this.generateUniqueCode(category, data.code, data.yearOfPurchase)
+    // Check if product code already exists
+    if (this.products.some((p) => p.code === data.code)) {
+      return { success: false, error: "Product code already exists" }
+    }
 
     const product: Product = {
       id: Date.now().toString(),
       name: data.name,
-      code: data.code,
-      category,
-      uniqueCode,
-      status: "active",
-      yearOfPurchase: data.yearOfPurchase,
-      unitNumber,
+      code: data.code.toUpperCase(),
+      categoryId: data.categoryId,
+      image: data.image,
       description: data.description,
-      destinationId: data.destinationId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -182,44 +217,94 @@ export class ProductService {
     return { success: true, product }
   }
 
-  updateProductDestination(productId: string, destinationId?: string): { success: boolean; error?: string } {
-    const productIndex = this.products.findIndex((p) => p.id === productId)
-    if (productIndex === -1) {
-      return { success: false, error: "Product not found" }
-    }
-
-    this.products[productIndex].destinationId = destinationId
-    this.products[productIndex].updatedAt = new Date().toISOString()
-    this.saveProducts()
-
-    return { success: true }
-  }
-
-  updateProductStatus(productId: string, status: Product["status"]): { success: boolean; error?: string } {
-    const productIndex = this.products.findIndex((p) => p.id === productId)
-    if (productIndex === -1) {
-      return { success: false, error: "Product not found" }
-    }
-
-    this.products[productIndex].status = status
-    this.products[productIndex].updatedAt = new Date().toISOString()
-    this.saveProducts()
-
-    return { success: true }
-  }
-
   getProducts(): Product[] {
     return [...this.products]
   }
 
-  getProductsByStatus(status: Product["status"]): Product[] {
-    return this.products.filter((p) => p.status === status)
+  getProductsByCategory(categoryId: string): Product[] {
+    return this.products.filter((p) => p.categoryId === categoryId)
   }
 
-  getProductsByDestination(destinationId: string): Product[] {
-    return this.products.filter((p) => p.destinationId === destinationId)
+  // Inventory management methods
+  addInventoryItem(data: {
+    productId: string
+    yearOfPurchase: number
+    destinationId?: string
+  }): { success: boolean; inventoryItem?: InventoryItem; error?: string } {
+    const product = this.products.find((p) => p.id === data.productId)
+    if (!product) {
+      return { success: false, error: "Product not found" }
+    }
+
+    const category = this.categories.find((c) => c.id === product.categoryId)
+    if (!category) {
+      return { success: false, error: "Category not found" }
+    }
+
+    const uniqueCode = this.generateUniqueCode(product.code)
+    const serialNumber = this.inventoryItems.filter(
+      (item) => item.product.code === product.code
+    ).length + 1
+
+    const inventoryItem: InventoryItem = {
+      id: Date.now().toString(),
+      productId: data.productId,
+      product,
+      category,
+      uniqueCode,
+      status: "active",
+      yearOfPurchase: data.yearOfPurchase,
+      serialNumber,
+      destinationId: data.destinationId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    this.inventoryItems.push(inventoryItem)
+    this.saveInventoryItems()
+
+    return { success: true, inventoryItem }
   }
 
+  updateInventoryItemDestination(itemId: string, destinationId?: string): { success: boolean; error?: string } {
+    const itemIndex = this.inventoryItems.findIndex((item) => item.id === itemId)
+    if (itemIndex === -1) {
+      return { success: false, error: "Inventory item not found" }
+    }
+
+    this.inventoryItems[itemIndex].destinationId = destinationId
+    this.inventoryItems[itemIndex].updatedAt = new Date().toISOString()
+    this.saveInventoryItems()
+
+    return { success: true }
+  }
+
+  updateInventoryItemStatus(itemId: string, status: InventoryItem["status"]): { success: boolean; error?: string } {
+    const itemIndex = this.inventoryItems.findIndex((item) => item.id === itemId)
+    if (itemIndex === -1) {
+      return { success: false, error: "Inventory item not found" }
+    }
+
+    this.inventoryItems[itemIndex].status = status
+    this.inventoryItems[itemIndex].updatedAt = new Date().toISOString()
+    this.saveInventoryItems()
+
+    return { success: true }
+  }
+
+  getInventoryItems(): InventoryItem[] {
+    return [...this.inventoryItems]
+  }
+
+  getInventoryItemsByStatus(status: InventoryItem["status"]): InventoryItem[] {
+    return this.inventoryItems.filter((item) => item.status === status)
+  }
+
+  getInventoryItemsByDestination(destinationId: string): InventoryItem[] {
+    return this.inventoryItems.filter((item) => item.destinationId === destinationId)
+  }
+
+  // Category and destination methods remain the same
   getCategories(): Category[] {
     return [...this.categories]
   }
@@ -229,7 +314,6 @@ export class ProductService {
   }
 
   addDestination(name: string, description?: string): { success: boolean; destination?: Destination; error?: string } {
-    // Check if destination name already exists
     if (this.destinations.some((d) => d.name.toLowerCase() === name.toLowerCase())) {
       return { success: false, error: "Destination name already exists" }
     }
@@ -248,12 +332,11 @@ export class ProductService {
   }
 
   deleteDestination(destinationId: string): { success: boolean; error?: string } {
-    // Check if any products are assigned to this destination
-    const productsInDestination = this.products.filter((p) => p.destinationId === destinationId)
-    if (productsInDestination.length > 0) {
+    const itemsInDestination = this.inventoryItems.filter((item) => item.destinationId === destinationId)
+    if (itemsInDestination.length > 0) {
       return {
         success: false,
-        error: `Cannot delete destination. ${productsInDestination.length} products are assigned to it.`,
+        error: `Cannot delete destination. ${itemsInDestination.length} inventory items are assigned to it.`,
       }
     }
 
@@ -269,7 +352,6 @@ export class ProductService {
   }
 
   addCategory(name: string, code: string): { success: boolean; category?: Category; error?: string } {
-    // Check if code already exists
     if (this.categories.some((c) => c.code === code)) {
       return { success: false, error: "Category code already exists" }
     }
@@ -287,13 +369,14 @@ export class ProductService {
     return { success: true, category }
   }
 
-  getProductStats() {
-    const total = this.products.length
-    const active = this.products.filter((p) => p.status === "active").length
-    const maintenance = this.products.filter((p) => p.status === "maintenance").length
-    const damaged = this.products.filter((p) => p.status === "damaged").length
-    const discarded = this.products.filter((p) => p.status === "discarded").length
-    const missing = this.products.filter((p) => p.status === "missing").length
+  getInventoryStats() {
+    // Exclude discarded items from stats
+    const activeItems = this.inventoryItems.filter((item) => item.status !== "discarded")
+    const total = activeItems.length
+    const active = activeItems.filter((item) => item.status === "active").length
+    const maintenance = activeItems.filter((item) => item.status === "maintenance").length
+    const damaged = activeItems.filter((item) => item.status === "damaged").length
+    const missing = activeItems.filter((item) => item.status === "missing").length
 
     return {
       total,
@@ -301,27 +384,26 @@ export class ProductService {
       maintenance,
       issues: damaged + missing,
       damaged,
-      discarded,
       missing,
     }
   }
 
   getDestinationStats() {
     return this.destinations.map((destination) => {
-      const products = this.getProductsByDestination(destination.id)
+      const items = this.getInventoryItemsByDestination(destination.id)
       const statusCounts = {
-        active: products.filter((p) => p.status === "active").length,
-        maintenance: products.filter((p) => p.status === "maintenance").length,
-        damaged: products.filter((p) => p.status === "damaged").length,
-        discarded: products.filter((p) => p.status === "discarded").length,
-        missing: products.filter((p) => p.status === "missing").length,
+        active: items.filter((item) => item.status === "active").length,
+        maintenance: items.filter((item) => item.status === "maintenance").length,
+        damaged: items.filter((item) => item.status === "damaged").length,
+        discarded: items.filter((item) => item.status === "discarded").length,
+        missing: items.filter((item) => item.status === "missing").length,
       }
 
       return {
         destination,
-        totalProducts: products.length,
+        totalItems: items.length,
         statusCounts,
-        products,
+        items,
       }
     })
   }

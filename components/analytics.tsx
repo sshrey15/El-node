@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ProductService, type Product } from "@/lib/products"
+import { ProductService, type InventoryItem } from "@/lib/products"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -31,15 +31,15 @@ const STATUS_COLORS = {
 }
 
 export function Analytics() {
-  const [products, setProducts] = useState<Product[]>([])
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [timeRange, setTimeRange] = useState("all")
   const productService = ProductService.getInstance()
 
   useEffect(() => {
-    setProducts(productService.getProducts())
+    setInventoryItems(productService.getInventoryItems())
   }, [])
 
-  const stats = productService.getProductStats()
+  const stats = productService.getInventoryStats()
 
   // Status distribution data for pie chart
   const statusData = [
@@ -51,7 +51,7 @@ export function Analytics() {
   ].filter((item) => item.value > 0)
 
   // Category distribution
-  const categoryStats = products.reduce(
+  const categoryStats = inventoryItems.reduce(
     (acc, product) => {
       const categoryName = product.category.name
       if (!acc[categoryName]) {
@@ -68,7 +68,7 @@ export function Analytics() {
   const categoryData = Object.values(categoryStats)
 
   // Year-wise acquisition data
-  const yearStats = products.reduce(
+  const yearStats = inventoryItems.reduce(
     (acc, product) => {
       const year = product.yearOfPurchase.toString()
       if (!acc[year]) {
@@ -127,14 +127,14 @@ export function Analytics() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
               <TrendingUp className="h-4 w-4 mr-2" />
-              Utilization Rate
+              Active Rate
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-chart-1">
               {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%
             </div>
-            <p className="text-xs text-muted-foreground">Active products in use</p>
+            <p className="text-xs text-muted-foreground">Active items in use</p>
           </CardContent>
         </Card>
 
@@ -149,7 +149,7 @@ export function Analytics() {
             <div className="text-2xl font-bold text-destructive">
               {stats.total > 0 ? Math.round((stats.issues / stats.total) * 100) : 0}%
             </div>
-            <p className="text-xs text-muted-foreground">Products with issues</p>
+            <p className="text-xs text-muted-foreground">Items with issues</p>
           </CardContent>
         </Card>
 
@@ -162,7 +162,7 @@ export function Analytics() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{categoryData.length}</div>
-            <p className="text-xs text-muted-foreground">Product categories</p>
+            <p className="text-xs text-muted-foreground">Item categories</p>
           </CardContent>
         </Card>
       </div>
@@ -172,7 +172,7 @@ export function Analytics() {
         <Card>
           <CardHeader>
             <CardTitle>Status Distribution</CardTitle>
-            <CardDescription>Current status of all products</CardDescription>
+            <CardDescription>Current status of all inventory items</CardDescription>
           </CardHeader>
           <CardContent>
             {statusData.length > 0 ? (
@@ -216,7 +216,7 @@ export function Analytics() {
         <Card>
           <CardHeader>
             <CardTitle>Category Performance</CardTitle>
-            <CardDescription>Products by category with health indicators</CardDescription>
+           <CardDescription>Items by category with health indicators</CardDescription>
           </CardHeader>
           <CardContent>
             {categoryData.length > 0 ? (
@@ -244,7 +244,7 @@ export function Analytics() {
       <Card>
         <CardHeader>
           <CardTitle>Acquisition Timeline</CardTitle>
-          <CardDescription>Products acquired by year</CardDescription>
+          <CardDescription>Items acquired by year</CardDescription>
         </CardHeader>
         <CardContent>
           {yearData.length > 0 ? (
