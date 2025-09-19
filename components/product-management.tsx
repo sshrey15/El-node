@@ -144,6 +144,7 @@ export function ProductManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-16">Image</TableHead>
                     <TableHead>Product Name</TableHead>
                     <TableHead>Product Code</TableHead>
                     <TableHead>Category</TableHead>
@@ -157,6 +158,19 @@ export function ProductManagement() {
                     const category = categories.find((c) => c.id === product.categoryId)
                     return (
                       <TableRow key={product.id}>
+                        <TableCell>
+                          <div className="w-12 h-12 flex items-center justify-center bg-muted rounded-lg overflow-hidden">
+                            {product.image ? (
+                              <img
+                                src={`/${product.image}`}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Package className="h-6 w-6 text-muted-foreground" />
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="font-medium">{product.name}</TableCell>
                         <TableCell className="font-mono font-medium">{product.code}</TableCell>
                         <TableCell>
