@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export interface ApiDestination {
   id: string
   name: string
@@ -447,3 +448,8 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
   }
 }
 
+=======
+
+
+{"code":"rate-limited","message":"You have hit the rate limit. Please upgrade to keep chatting.","providerLimitHit":false,"isRetryable":true} 
+>>>>>>> 1edf8dba0cf28a5431278eb993e25f22633a40f0
