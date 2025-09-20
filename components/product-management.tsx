@@ -33,6 +33,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import imageCompression from "browser-image-compression"
 
 export function ProductManagement() {
     const { canEdit, user } = useAuth()
@@ -399,11 +400,23 @@ function ImageUploadComponent({
         setIsUploading(true)
         try {
             const preview = URL.createObjectURL(file)
-            const base64 = await convertToBase64(file)
+            
+            // Compress the image more aggressively
+            const options = {
+                maxSizeMB: 0.5, // Reduced from 1MB to 0.5MB
+                maxWidthOrHeight: 800, // Reduced from 1920 to 800
+                useWebWorker: true,
+                quality: 0.7, // Added quality setting
+            }
+            
+            const compressedFile = await imageCompression(file, options)
+            console.log(`Original: ${(file.size / 1024 / 1024).toFixed(2)}MB, Compressed: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`)
+            
+            const base64 = await convertToBase64(compressedFile)
             
             const imageUpload: ImageUpload = {
                 preview,
-                file,
+                file: compressedFile,
                 base64
             }
             
@@ -685,78 +698,36 @@ function EditProductForm({
         setFormData({ ...formData, image: base64 || "" })
     }
 
-     const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError("");
-        setIsLoading(true);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError("")
+        setIsLoading(true)
 
         if (!formData.name.trim()) {
-            setError("Please enter a product name");
-            setIsLoading(false);
-            return;
-        }
-
-        // 1. Create a new FormData object instead of a plain object
-        const data = new FormData();
-        
-        // 2. Append the text fields
-        data.append("name", formData.name.trim());
-        data.append("description", formData.description.trim());
-
-        // 3. Conditionally append the image file
-        // Check if the image has been changed or cleared
-        if (formData.image !== product.image) {
-            if (formData.image && formData.image.startsWith('data:')) {
-                // New image uploaded (base64 string), convert to Blob
-                const parts = formData.image.split(',');
-                const mime = parts[0].match(/:(.*?);/)?.[1];
-                const b64data = parts[1];
-
-                if (mime && b64data) {
-                    const byteCharacters = atob(b64data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const imageBlob = new Blob([byteArray], { type: mime });
-                    // Append the Blob with a filename (e.g., product_image.png)
-                    data.append("image", imageBlob, `product_image.${mime.split('/')[1] || 'png'}`);
-                } else {
-                    console.error("Failed to parse base64 image data.");
-                    setError("Failed to process image. Please try again.");
-                    setIsLoading(false);
-                    return; // Stop submission
-                }
-            } else if (formData.image === "") {
-                // Image was cleared by the user
-                data.append("image", ""); // Signal to backend to remove the image
-            }
-            // If formData.image is the same as product.image (and not a base64 string),
-            // or if it's a URL and no change, this block is skipped, and the backend
-            // should implicitly keep the existing image.
+            setError("Please enter a product name")
+            setIsLoading(false)
+            return
         }
 
         try {
-            // 4. Pass the FormData object directly to the API service
-            // The 'apiService.updateProduct' function's type definition expects 'UpdateProductRequest',
-            // but 'FormData' is being passed. Casting to 'any' to resolve the type error,
-            // assuming the backend is configured to handle 'FormData' for file uploads.
-            // The API service's type signature should ideally be updated to accept 'FormData'.
-            const result = await apiService.updateProduct(product.id, data as any);
-            
+            const result = await apiService.updateProduct(product.id, {
+                name: formData.name.trim(),
+                description: formData.description.trim(),
+                image: formData.image,
+            })
+
             if (result.success) {
-                onSuccess();
+                onSuccess()
             } else {
-                setError(result.error || "Failed to update product");
+                setError(result.error || "Failed to update product")
             }
         } catch (error) {
-            console.error("Error updating product:", error);
-            setError("Failed to update product");
+            console.error("Error updating product:", error)
+            setError("Failed to update product")
         } finally {
-            setIsLoading(false);
+            setIsLoading(false)
         }
-    };
+    }
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
