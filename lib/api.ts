@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://el-node-backend.vercel.app/api"
+
 
 export interface ApiDestination {
   id: string

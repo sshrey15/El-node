@@ -401,13 +401,18 @@ function AddInventoryForm({
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const apiService = ApiService.getInstance()
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("")
+
+  const filteredProducts = products.filter(
+    (product) => product.categoryId === selectedCategoryId
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setIsLoading(true)
 
-    if (!formData.productId || !formData.destinationId || !formData.categoryId) {
+    if (!formData.productId || !formData.categoryId) {
       setError("Please fill in all required fields")
       setIsLoading(false)
       return
@@ -444,27 +449,57 @@ function AddInventoryForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Category Selection */}
       <div className="space-y-2">
-        <Label htmlFor="productId">Product *</Label>
+        <Label htmlFor="categoryId">Category *</Label>
         <Select 
-          value={formData.productId} 
-          onValueChange={(value) => setFormData({ ...formData, productId: value })}
+          value={selectedCategoryId} 
+          onValueChange={(value) => {
+            setSelectedCategoryId(value)
+            setFormData({ ...formData, categoryId: value, productId: "" }) // Reset product when category changes
+          }}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select product" />
+            <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-            {products.map((product) => (
-              <SelectItem key={product.id} value={product.id}>
-                {product.name} ({product.uniqueCode})
+            {categories.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name} ({category.code})
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
+      {/* Product Selection (Conditional based on Category) */}
       <div className="space-y-2">
-        <Label htmlFor="destinationId">Destination *</Label>
+        <Label htmlFor="productId">Product *</Label>
+        <Select 
+          value={formData.productId} 
+          onValueChange={(value) => setFormData({ ...formData, productId: value })}
+          disabled={!selectedCategoryId}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select product" />
+          </SelectTrigger>
+          <SelectContent>
+            {filteredProducts.length === 0 ? (
+              <div className="py-2 px-3 text-sm text-muted-foreground">No products found for this category</div>
+            ) : (
+              filteredProducts.map((product) => (
+                <SelectItem key={product.id} value={product.id}>
+                  {product.name} ({product.uniqueCode})
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      {/* Destination Selection (Now optional) */}
+      <div className="space-y-2">
+        <Label htmlFor="destinationId">Destination (Optional)</Label>
         <Select 
           value={formData.destinationId} 
           onValueChange={(value) => setFormData({ ...formData, destinationId: value })}
@@ -476,25 +511,6 @@ function AddInventoryForm({
             {destinations.map((destination) => (
               <SelectItem key={destination.id} value={destination.id}>
                 {destination.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="categoryId">Category *</Label>
-        <Select 
-          value={formData.categoryId} 
-          onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.name} ({category.code})
               </SelectItem>
             ))}
           </SelectContent>
@@ -538,7 +554,7 @@ function AddInventoryForm({
         </Alert>
       )}
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="w-full" disabled={isLoading || !formData.productId}>
         {isLoading ? (
           <>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -571,20 +587,26 @@ function EditInventoryForm({
     status: item.status,
     yearOfPurchase: item.yearOfPurchase,
     productId: item.productId,
-    destinationId: item.destinationId,
+    destinationId: item.destinationId || "null",
     categoryId: item.categoryId,
   })
 
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const apiService = ApiService.getInstance()
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(item.categoryId)
+
+  // Filter products based on the selected category for the edit form
+  const filteredProducts = products.filter(
+    (product) => product.categoryId === selectedCategoryId
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setIsLoading(true)
 
-    if (!formData.productId || !formData.destinationId || !formData.categoryId) {
+    if (!formData.productId || !formData.categoryId) {
       setError("Please fill in all required fields")
       setIsLoading(false)
       return
@@ -595,7 +617,7 @@ function EditInventoryForm({
         status: formData.status,
         yearOfPurchase: formData.yearOfPurchase,
         productId: formData.productId,
-        destinationId: formData.destinationId,
+        destinationId: formData.destinationId || "null",
         categoryId: formData.categoryId,
       })
 
@@ -615,18 +637,21 @@ function EditInventoryForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="edit-productId">Product *</Label>
+        <Label htmlFor="edit-categoryId">Category *</Label>
         <Select 
-          value={formData.productId} 
-          onValueChange={(value) => setFormData({ ...formData, productId: value })}
+          value={selectedCategoryId} 
+          onValueChange={(value) => {
+            setSelectedCategoryId(value)
+            setFormData({ ...formData, categoryId: value, productId: "" }) // Reset product when category changes
+          }}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select product" />
+            <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-            {products.map((product) => (
-              <SelectItem key={product.id} value={product.id}>
-                {product.name} ({product.uniqueCode})
+            {categories.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name} ({category.code})
               </SelectItem>
             ))}
           </SelectContent>
@@ -634,9 +659,33 @@ function EditInventoryForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="edit-destinationId">Destination *</Label>
+        <Label htmlFor="edit-productId">Product *</Label>
         <Select 
-          value={formData.destinationId} 
+          value={formData.productId} 
+          onValueChange={(value) => setFormData({ ...formData, productId: value })}
+          disabled={!selectedCategoryId}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select product" />
+          </SelectTrigger>
+          <SelectContent>
+            {filteredProducts.length === 0 ? (
+              <div className="py-2 px-3 text-sm text-muted-foreground">No products found for this category</div>
+            ) : (
+              filteredProducts.map((product) => (
+                <SelectItem key={product.id} value={product.id}>
+                  {product.name} ({product.uniqueCode})
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="edit-destinationId">Destination (Optional)</Label>
+        <Select 
+          value={formData.destinationId || ""}
           onValueChange={(value) => setFormData({ ...formData, destinationId: value })}
         >
           <SelectTrigger>
@@ -652,23 +701,17 @@ function EditInventoryForm({
         </Select>
       </div>
 
+      {/* Changed order: Year of Purchase is now before Status */}
       <div className="space-y-2">
-        <Label htmlFor="edit-categoryId">Category *</Label>
-        <Select 
-          value={formData.categoryId} 
-          onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.name} ({category.code})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="edit-yearOfPurchase">Year of Purchase</Label>
+        <Input
+          id="edit-yearOfPurchase"
+          type="number"
+          value={formData.yearOfPurchase}
+          onChange={(e) => setFormData({ ...formData, yearOfPurchase: parseInt(e.target.value) || new Date().getFullYear() })}
+          min="1900"
+          max={new Date().getFullYear() + 1}
+        />
       </div>
 
       <div className="space-y-2">
@@ -688,18 +731,6 @@ function EditInventoryForm({
             <SelectItem value="missing">Missing</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="edit-yearOfPurchase">Year of Purchase</Label>
-        <Input
-          id="edit-yearOfPurchase"
-          type="number"
-          value={formData.yearOfPurchase}
-          onChange={(e) => setFormData({ ...formData, yearOfPurchase: parseInt(e.target.value) || new Date().getFullYear() })}
-          min="1900"
-          max={new Date().getFullYear() + 1}
-        />
       </div>
 
       {error && (
