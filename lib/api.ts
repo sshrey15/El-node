@@ -138,8 +138,8 @@ export interface CreateProductRequest {
 
 export interface UpdateProductRequest {
   name: string
-  status?: string
   description: string
+  image: string
 }
 
 export interface CreateCategoryRequest {
@@ -180,13 +180,17 @@ export class ApiService {
     return ApiService.instance
   }
 
-  // GET /api/destinations
-  async getDestinations(): Promise<{ success: boolean; data?: ApiDestination[]; error?: string }> {
+  // Helper method to handle API requests with better error handling
+  private async makeRequest<T>(
+    url: string,
+    options: RequestInit = {}
+  ): Promise<{ success: boolean; data?: T; error?: string }> {
     try {
-      const response = await fetch(`https://el-node-backend.vercel.app/api/destinations`, {
-        method: "GET",
+      const response = await fetch(url, {
+        ...options,
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
+          ...options.headers,
         },
       })
 
@@ -194,13 +198,34 @@ export class ApiService {
         const data = await response.json()
         return { success: true, data }
       } else {
-        const errorData = await response.json()
-        return { success: false, error: errorData.message || "Failed to fetch destinations" }
+        const errorData = await response.json().catch(() => ({}))
+        let errorMessage = errorData.message || errorData.error || `Request failed with status ${response.status}`
+        
+        // Handle specific error cases
+        if (response.status === 413) {
+          errorMessage = "File too large. Please compress your image and try again."
+        } else if (response.status === 0 || !response.ok) {
+          errorMessage = "Network error. Please check your connection and try again."
+        }
+        
+        return { success: false, error: errorMessage }
       }
     } catch (error) {
-      console.error("Get destinations error:", error)
-      return { success: false, error: "Network error. Please check if the server is running." }
+      console.error("API request error:", error)
+      let errorMessage = "Network error. Please check your connection and try again."
+      
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        errorMessage = "Unable to connect to server. Please check if the server is running and try again."
+      }
+      
+      return { success: false, error: errorMessage }
     }
+  }
+  // GET /api/destinations
+  async getDestinations(): Promise<{ success: boolean; data?: ApiDestination[]; error?: string }> {
+    return this.makeRequest<ApiDestination[]>(`https://el-node-backend.vercel.app/api/destinations`, {
+      method: "GET",
+    })
   }
 
   // POST /api/destinations
@@ -371,7 +396,6 @@ export class ApiService {
     try {
       const response = await fetch(`https://el-node-backend.vercel.app/api/categories`, {
         method: "GET",
-        headers: {
           "Content-Type": "application/json",
         },
       })
