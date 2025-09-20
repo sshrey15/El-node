@@ -430,15 +430,15 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
         <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="name">Product Name *</Label>
-                <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+                <Input id="name"  placeholder="e.g., DELL XPS" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
             </div>
             <div className="space-y-2">
                 <Label htmlFor="uniqueCode">Product Code *</Label>
-                <Input id="uniqueCode" value={formData.uniqueCode} onChange={(e) => setFormData({ ...formData, uniqueCode: e.target.value.toUpperCase() })} required />
+                <Input id="uniqueCode" placeholder="e.g., DEL" value={formData.uniqueCode} onChange={(e) => setFormData({ ...formData, uniqueCode: e.target.value.toUpperCase() })} required />
             </div>
             <div className="space-y-2">
                 <Label htmlFor="categoryId">Category *</Label>
-                <Select value={formData.categoryId} onValueChange={(value) => setFormData({ ...formData, categoryId: value })} required>
+                <Select value={formData.categoryId}  onValueChange={(value) => setFormData({ ...formData, categoryId: value })} required>
                     <SelectTrigger disabled={categoriesLoading}>
                         <SelectValue placeholder={categoriesLoading ? "Loading..." : "Select a category"} />
                     </SelectTrigger>
@@ -449,10 +449,10 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
                     </SelectContent>
                 </Select>
             </div>
-            <ImageUploadComponent onImageChange={setImageFile} disabled={isLoading} />
+            <ImageUploadComponent onImageChange={setImageFile}  disabled={isLoading} />
             <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                <Textarea id="description"      placeholder="Detailed description of the product" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
             </div>
             {error && (
                 <Alert variant="destructive">

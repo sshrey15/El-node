@@ -155,7 +155,7 @@ export interface CreateInventoryItemRequest {
   status: string
   yearOfPurchase: number
   productId: string
-  destinationId: string
+  destinationId?: string | null
   categoryId: string
 }
 
@@ -163,7 +163,7 @@ export interface UpdateInventoryItemRequest {
   status: string
   yearOfPurchase: number
   productId: string
-  destinationId: string
+  destinationId?: string | null
   categoryId: string
 }
 

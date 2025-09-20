@@ -423,7 +423,7 @@ function AddInventoryForm({
         status: formData.status,
         yearOfPurchase: formData.yearOfPurchase,
         productId: formData.productId,
-        destinationId: formData.destinationId,
+        destinationId: formData.destinationId || null ,
         categoryId: formData.categoryId,
       })
 
