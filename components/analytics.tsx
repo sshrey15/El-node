@@ -46,7 +46,6 @@ export function Analytics() {
     { name: "Active", value: stats.active, color: STATUS_COLORS.active },
     { name: "Maintenance", value: stats.maintenance, color: STATUS_COLORS.maintenance },
     { name: "Damaged", value: stats.damaged, color: STATUS_COLORS.damaged },
-    { name: "Discarded", value: stats.discarded, color: STATUS_COLORS.discarded },
     { name: "Missing", value: stats.missing, color: STATUS_COLORS.missing },
   ].filter((item) => item.value > 0)
 

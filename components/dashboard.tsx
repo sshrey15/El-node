@@ -1,11 +1,12 @@
 "use client"
 
+import type React from "react"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Package, Settings, LogOut, BarChart3, MapPin, TrendingUp, AlertTriangle, Calendar, Activity, Loader2 } from "lucide-react"
+import { LayoutDashboard, Package, Settings, LogOut, BarChart3, MapPin, TrendingUp, AlertTriangle, Calendar, Activity, Loader2, FileDown } from "lucide-react"
 import { ProductManagement } from "@/components/product-management"
 import { InventoryManagement } from "@/components/inventory-management"
 import { CategoryManagement } from "@/components/category-management"
@@ -29,6 +30,14 @@ import {
   LineChart,
   Line,
 } from "recharts"
+// Imports for PDF Export Dialog
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { jsPDF } from "jspdf"
+import autoTable from "jspdf-autotable"
+
 
 export function Dashboard() {
   const { user, logout, canEdit } = useAuth()
@@ -110,12 +119,12 @@ export function Dashboard() {
   )
 }
 
-const STATUS_COLORS = {
-  active: "#059669",
-  maintenance: "#d97706",
-  damaged: "#be123c",
-  discarded: "#6b7280",
-  missing: "#7c3aed",
+const STATUS_OPTIONS = {
+  active: { label: "Active", color: "#059669" },
+  maintenance: { label: "Maintenance", color: "#d97706" },
+  damaged: { label: "Damaged", color: "#be123c" },
+  discarded: { label: "Discarded", color: "#6b7280" },
+  missing: { label: "Missing", color: "#7c3aed" },
 }
 
 function DashboardOverview() {
@@ -126,6 +135,7 @@ function DashboardOverview() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [timeRange, setTimeRange] = useState("all")
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const apiService = ApiService.getInstance()
 
   useEffect(() => {
@@ -143,23 +153,12 @@ function DashboardOverview() {
         apiService.getCategories(),
       ])
 
-      if (inventoryResult.success && inventoryResult.data) {
-        setInventoryItems(inventoryResult.data)
-      } else {
-        setError(inventoryResult.error || "Failed to load inventory data")
-      }
+      if (inventoryResult.success && inventoryResult.data) setInventoryItems(inventoryResult.data)
+      else setError(inventoryResult.error || "Failed to load inventory data")
+      if (productsResult.success && productsResult.data) setProducts(productsResult.data)
+      if (destinationsResult.success && destinationsResult.data) setDestinations(destinationsResult.data)
+      if (categoriesResult.success && categoriesResult.data) setCategories(categoriesResult.data)
 
-      if (productsResult.success && productsResult.data) {
-        setProducts(productsResult.data)
-      }
-
-      if (destinationsResult.success && destinationsResult.data) {
-        setDestinations(destinationsResult.data)
-      }
-
-      if (categoriesResult.success && categoriesResult.data) {
-        setCategories(categoriesResult.data)
-      }
     } catch (error) {
       console.error("Error loading dashboard data:", error)
       setError("Failed to load dashboard data")
@@ -168,7 +167,6 @@ function DashboardOverview() {
     }
   }
 
-  // Calculate stats from API data
   const stats = {
     total: inventoryItems.length,
     active: inventoryItems.filter(item => item.status === "active").length,
@@ -178,48 +176,34 @@ function DashboardOverview() {
     missing: inventoryItems.filter(item => item.status === "missing").length,
   }
 
-  // Status distribution data for pie chart
-  const statusData = [
-    { name: "Active", value: stats.active, color: STATUS_COLORS.active },
-    { name: "Maintenance", value: stats.maintenance, color: STATUS_COLORS.maintenance },
-    { name: "Damaged", value: stats.damaged, color: STATUS_COLORS.damaged },
-    { name: "Discarded", value: stats.discarded, color: STATUS_COLORS.discarded },
-    { name: "Missing", value: stats.missing, color: STATUS_COLORS.missing },
-  ].filter((item) => item.value > 0)
-
-  // Category distribution
-  const categoryStats = inventoryItems.reduce(
-    (acc, item) => {
-      const categoryName = item.category.name
-      if (!acc[categoryName]) {
-        acc[categoryName] = { name: categoryName, count: 0, active: 0, issues: 0 }
-      }
-      acc[categoryName].count++
-      if (item.status === "active") acc[categoryName].active++
-      if (item.status === "damaged" || item.status === "missing") acc[categoryName].issues++
-      return acc
-    },
-    {} as Record<string, { name: string; count: number; active: number; issues: number }>,
-  )
+  const statusData = Object.entries(STATUS_OPTIONS)
+    .map(([key, { label, color }]) => ({
+      name: label,
+      value: stats[key as keyof typeof stats],
+      color: color,
+    }))
+    .filter((item) => item.value > 0)
+    
+  const categoryStats = inventoryItems.reduce((acc, item) => {
+    const categoryName = item.category.name
+    if (!acc[categoryName]) acc[categoryName] = { name: categoryName, count: 0, active: 0, issues: 0 }
+    acc[categoryName].count++
+    if (item.status === "active") acc[categoryName].active++
+    if (item.status === "damaged" || item.status === "missing") acc[categoryName].issues++
+    return acc
+  }, {} as Record<string, { name: string; count: number; active: number; issues: number }>)
 
   const categoryData = Object.values(categoryStats)
 
-  // Year-wise acquisition data
-  const yearStats = inventoryItems.reduce(
-    (acc, item) => {
-      const year = item.yearOfPurchase.toString()
-      if (!acc[year]) {
-        acc[year] = { year, count: 0 }
-      }
-      acc[year].count++
-      return acc
-    },
-    {} as Record<string, { year: string; count: number }>,
-  )
+  const yearStats = inventoryItems.reduce((acc, item) => {
+    const year = item.yearOfPurchase.toString()
+    if (!acc[year]) acc[year] = { year, count: 0 }
+    acc[year].count++
+    return acc
+  }, {} as Record<string, { year: string; count: number }>)
 
-  const yearData = Object.values(yearStats).sort((a, b) => Number.parseInt(a.year) - Number.parseInt(b.year))
+  const yearData = Object.values(yearStats).sort((a, b) => parseInt(a.year) - parseInt(b.year))
 
-  // Health score calculation
   const healthScore = stats.total > 0 ? Math.round(((stats.active + stats.maintenance * 0.7) / stats.total) * 100) : 100
 
   if (isLoading) {
@@ -240,80 +224,63 @@ function DashboardOverview() {
           <h2 className="text-3xl font-bold text-foreground">Dashboard Overview</h2>
           <p className="text-muted-foreground">Comprehensive insights into your inventory performance</p>
         </div>
-        <Select value={timeRange} onValueChange={setTimeRange}>
-          <SelectTrigger className="w-48">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Time</SelectItem>
-            <SelectItem value="year">This Year</SelectItem>
-            <SelectItem value="month">This Month</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center space-x-2">
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-48">
+                <Calendar className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+              </SelectContent>
+            </Select>
+            <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="outline">
+                        <FileDown className="h-4 w-4 mr-2"/>
+                        Export PDF
+                    </Button>
+                </DialogTrigger>
+                <ExportDialog 
+                    items={inventoryItems}
+                    categories={categories}
+                    destinations={destinations}
+                    onClose={() => setIsExportDialogOpen(false)}
+                />
+            </Dialog>
+        </div>
       </div>
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-              <Package className="h-4 w-4 mr-2" />
-              Inventory Health
-            </CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center"><Package className="h-4 w-4 mr-2" />Inventory Health</CardTitle></CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{healthScore}%</div>
             <Progress value={healthScore} className="mt-2" />
-            <p className="text-xs text-muted-foreground mt-2">
-              {healthScore >= 80 ? "Excellent" : healthScore >= 60 ? "Good" : "Needs Attention"}
-            </p>
+            <p className="text-xs text-muted-foreground mt-2">{healthScore >= 80 ? "Excellent" : healthScore >= 60 ? "Good" : "Needs Attention"}</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Active Rate
-            </CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center"><TrendingUp className="h-4 w-4 mr-2" />Active Rate</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-chart-1">
-              {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%
-            </div>
+            <div className="text-2xl font-bold text-chart-1">{stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%</div>
             <p className="text-xs text-muted-foreground">Active items in use</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Risk Factor
-            </CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center"><AlertTriangle className="h-4 w-4 mr-2" />Risk Factor</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">
-              {stats.total > 0 ? Math.round(((stats.damaged + stats.missing) / stats.total) * 100) : 0}%
-            </div>
+            <div className="text-2xl font-bold text-destructive">{stats.total > 0 ? Math.round(((stats.damaged + stats.missing) / stats.total) * 100) : 0}%</div>
             <p className="text-xs text-muted-foreground">Items with issues</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
-              <Activity className="h-4 w-4 mr-2" />
-              Categories
-            </CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center"><Activity className="h-4 w-4 mr-2" />Categories</CardTitle></CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{categoryData.length}</div>
             <p className="text-xs text-muted-foreground">Item categories</p>
@@ -321,116 +288,64 @@ function DashboardOverview() {
         </Card>
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Status Distribution */}
         <Card>
-          <CardHeader>
-            <CardTitle>Status Distribution</CardTitle>
-            <CardDescription>Current status of all inventory items</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Status Distribution</CardTitle><CardDescription>Current status of all inventory items</CardDescription></CardHeader>
           <CardContent>
             {statusData.length > 0 ? (
-              <div className="flex items-center justify-center">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-[300px] text-muted-foreground">No data available</div>
-            )}
-            <div className="flex flex-wrap gap-4 mt-4">
-              {statusData.map((item) => (
-                <div key={item.name} className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm">
-                    {item.name}: {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
+                <>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                        <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
+                            {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip />
+                        </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex flex-wrap gap-4 mt-4 justify-center">
+                        {statusData.map((item) => (
+                            <div key={item.name} className="flex items-center space-x-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-sm">{item.name}: {item.value}</span>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            ) : <div className="flex items-center justify-center h-[300px] text-muted-foreground">No data available</div>}
           </CardContent>
         </Card>
-
-        {/* Category Performance */}
         <Card>
-          <CardHeader>
-            <CardTitle>Category Performance</CardTitle>
-           <CardDescription>Items by category with health indicators</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Category Performance</CardTitle><CardDescription>Items by category with health indicators</CardDescription></CardHeader>
           <CardContent>
             {categoryData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={categoryData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#059669" name="Total" />
-                  <Bar dataKey="active" fill="#10b981" name="Active" />
-                  <Bar dataKey="issues" fill="#be123c" name="Issues" />
+                  <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip />
+                  <Bar dataKey="count" fill={STATUS_OPTIONS.active.color} name="Total" /><Bar dataKey="active" fill="#10b981" name="Active" /><Bar dataKey="issues" fill={STATUS_OPTIONS.damaged.color} name="Issues" />
                 </BarChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                No categories available
-              </div>
-            )}
+            ) : <div className="flex items-center justify-center h-[300px] text-muted-foreground">No categories available</div>}
           </CardContent>
         </Card>
       </div>
 
-      {/* Acquisition Timeline */}
       <Card>
-        <CardHeader>
-          <CardTitle>Acquisition Timeline</CardTitle>
-          <CardDescription>Items acquired by year</CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle>Acquisition Timeline</CardTitle><CardDescription>Items acquired by year</CardDescription></CardHeader>
         <CardContent>
           {yearData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={yearData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" />
-                <YAxis />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  stroke="#059669"
-                  strokeWidth={3}
-                  dot={{ fill: "#059669", strokeWidth: 2, r: 6 }}
-                />
+                <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="year" /><YAxis /><Tooltip />
+                <Line type="monotone" dataKey="count" stroke={STATUS_OPTIONS.active.color} strokeWidth={3} dot={{ fill: STATUS_OPTIONS.active.color, strokeWidth: 2, r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-              No acquisition data available
-            </div>
-          )}
+          ) : <div className="flex items-center justify-center h-[300px] text-muted-foreground">No acquisition data available</div>}
         </CardContent>
       </Card>
 
-      {/* Category Details */}
       <Card>
-        <CardHeader>
-          <CardTitle>Category Breakdown</CardTitle>
-          <CardDescription>Detailed view of each category's performance</CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle>Category Breakdown</CardTitle><CardDescription>Detailed view of each category's performance</CardDescription></CardHeader>
         <CardContent>
           {categoryData.length > 0 ? (
             <div className="space-y-4">
@@ -456,11 +371,126 @@ function DashboardOverview() {
                 )
               })}
             </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">No categories to display</div>
-          )}
+          ) : <div className="text-center py-8 text-muted-foreground">No categories to display</div>}
         </CardContent>
       </Card>
     </div>
   )
+}
+
+
+// --- New Component for PDF Export Dialog ---
+function ExportDialog({ items, categories, destinations, onClose }: { items: ApiInventoryItem[], categories: ApiCategory[], destinations: ApiDestination[], onClose: () => void }) {
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
+    const [startYear, setStartYear] = useState<string>("");
+    const [endYear, setEndYear] = useState<string>("");
+
+    const handleCheckboxChange = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
+        setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
+
+    const handleGeneratePdf = () => {
+        const filteredData = items.filter(item => {
+            const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
+            const categoryMatch = selectedCategories.length === 0 || selectedCategories.includes(item.category.id);
+            const destinationMatch = selectedDestinations.length === 0 || (item.destinationId && selectedDestinations.includes(item.destinationId));
+            const yearMatch = (!startYear || item.yearOfPurchase >= parseInt(startYear)) && (!endYear || item.yearOfPurchase <= parseInt(endYear));
+            return statusMatch && categoryMatch && destinationMatch && yearMatch;
+        });
+
+        if (filteredData.length === 0) {
+            alert("No data matches your filter criteria. PDF will not be generated.");
+            return;
+        }
+
+        const doc = new jsPDF();
+        doc.setFontSize(18);
+        doc.text("Inventory Report", 14, 22);
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 28);
+
+        autoTable(doc, {
+            startY: 35,
+            head: [['Unique Code', 'Product', 'Category', 'Destination', 'Status', 'Purchase Year']],
+            body: filteredData.map(item => [
+                item.uniqueCode,
+                item.product.name,
+                item.category.name,
+                item.destination?.name ?? 'N/A',
+                item.status,
+                item.yearOfPurchase.toString(),
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [22, 163, 74] },
+        });
+
+        doc.save(`ELIMS_Inventory_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+        onClose();
+    };
+
+    return (
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Export Inventory Report</DialogTitle>
+                <DialogDescription>Select filters to customize your PDF report.</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 max-h-[60vh] overflow-y-auto pr-2">
+                {/* Status Filter */}
+                <div className="space-y-2">
+                    <Label className="font-semibold">Filter by Status</Label>
+                    <div className="space-y-1">
+                        {Object.entries(STATUS_OPTIONS).map(([key, { label }]) => (
+                            <div key={key} className="flex items-center space-x-2">
+                                <Checkbox className="border-grey" id={`status-${key}`} onCheckedChange={() => handleCheckboxChange(setSelectedStatuses, key)} />
+                                <label htmlFor={`status-${key}`} className="text-sm">{label}</label>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                {/* Year Filter */}
+                <div className="space-y-2">
+                    <Label className="font-semibold">Filter by Purchase Year</Label>
+                    <div className="flex items-center space-x-2">
+                        <Input type="number" placeholder="Start Year" value={startYear} onChange={e => setStartYear(e.target.value)} />
+                        <span>-</span>
+                        <Input type="number" placeholder="End Year" value={endYear} onChange={e => setEndYear(e.target.value)} />
+                    </div>
+                </div>
+                {/* Category Filter */}
+                <div className="space-y-2">
+                    <Label className="font-semibold">Filter by Category</Label>
+                    <div className="space-y-1">
+                        {categories.map(cat => (
+                            <div key={cat.id} className="flex items-center space-x-2">
+                                <Checkbox className="border-grey" id={`cat-${cat.id}`} onCheckedChange={() => handleCheckboxChange(setSelectedCategories, cat.id)} />
+                                <label htmlFor={`cat-${cat.id}`} className="text-sm">{cat.name}</label>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                {/* Destination Filter */}
+                <div className="space-y-2">
+                    <Label className="font-semibold">Filter by Destination</Label>
+                    <div className="space-y-1">
+                        {destinations.map(dest => (
+                            <div key={dest.id} className="flex items-center space-x-2">
+                                <Checkbox className="border-grey" id={`dest-${dest.id}`} onCheckedChange={() => handleCheckboxChange(setSelectedDestinations, dest.id)} />
+                                <label htmlFor={`dest-${dest.id}`} className="text-sm">{dest.name}</label>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button onClick={handleGeneratePdf}>
+                    <FileDown className="h-4 w-4 mr-2"/>
+                    Generate PDF
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    )
 }
