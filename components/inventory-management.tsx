@@ -536,10 +536,11 @@ function AddInventoryForm({
 
     try {
       const result = await apiService.createInventoryItem({
+        uniqueCode: formData.productId + "-" + formData.yearOfPurchase + "-" + Math.floor(Math.random() * 1000000),
         status: formData.status,
         yearOfPurchase: formData.yearOfPurchase,
         productId: formData.productId,
-        destinationId: formData.destinationId || null ,
+        destinationId: formData.destinationId || null,
         categoryId: formData.categoryId,
       })
 
