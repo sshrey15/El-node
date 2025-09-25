@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { ApiService, type ApiDestination, type ApiCategory, type ApiProduct, type UpdateInventoryItemRequest } from "@/lib/api"
+import { ApiService, type ApiDestination, type ApiCategory, type ApiProduct, type UpdateInventoryItemRequest, type ApiInventoryItem } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,20 +35,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, MapPin, Package, Trash2, Eye, Edit, Loader2, Move, X } from "lucide-react"
 
 // --- TYPE DEFINITIONS ---
-type ApiInventoryItem = {
-  id: string
-  uniqueCode: string
-  status: "active" | "maintenance" | "damaged" | "discarded" | "missing"
-  yearOfPurchase: number
-  productId: string
-  categoryId: string
-  destinationId: string | null
-  createdAt: string // <-- FIXED: Added property
-  updatedAt: string // <-- FIXED: Added property
-  product: { id: string; name: string; description?: string | null }
-  category: { id: string; name: string }
-}
-
 interface ExtendedApiDestination extends ApiDestination {
   inventoryItems: ApiInventoryItem[]
 }
@@ -66,6 +52,7 @@ export function DestinationManagement() {
   const [destinations, setDestinations] = useState<ExtendedApiDestination[]>([])
   const [products, setProducts] = useState<ApiProduct[]>([])
   const [categories, setCategories] = useState<ApiCategory[]>([])
+  const [allInventoryItems, setAllInventoryItems] = useState<ApiInventoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -90,10 +77,11 @@ export function DestinationManagement() {
     setIsLoading(true)
     setError("")
     try {
-      const [destResult, catResult, prodResult] = await Promise.all([
+      const [destResult, catResult, prodResult, inventoryResult] = await Promise.all([
         apiService.getDestinations(),
         apiService.getCategories(),
         apiService.getProducts(),
+        apiService.getInventoryItems(),
       ])
 
       if (destResult.success && destResult.data) {
@@ -103,6 +91,7 @@ export function DestinationManagement() {
       }
       if (catResult.success && catResult.data) setCategories(catResult.data)
       if (prodResult.success && prodResult.data) setProducts(prodResult.data)
+      if (inventoryResult.success && inventoryResult.data) setAllInventoryItems(inventoryResult.data)
     } catch (error) {
       console.error("Error loading data:", error)
       setError("An unexpected error occurred while loading data.")
@@ -112,16 +101,24 @@ export function DestinationManagement() {
   }
   
   const refreshDestinations = async () => {
-      const result = await apiService.getDestinations()
-      if (result.success && result.data) {
-          const allDestinations = result.data as ExtendedApiDestination[]
+      const [destResult, inventoryResult] = await Promise.all([
+        apiService.getDestinations(),
+        apiService.getInventoryItems(),
+      ])
+      
+      if (destResult.success && destResult.data) {
+          const allDestinations = destResult.data as ExtendedApiDestination[]
           setDestinations(allDestinations)
           if (viewingDestination) {
               const updatedView = allDestinations.find(d => d.id === viewingDestination.id)
               setViewingDestination(updatedView || null)
           }
       } else {
-          setError(result.error || "Failed to refresh destinations")
+          setError(destResult.error || "Failed to refresh destinations")
+      }
+      
+      if (inventoryResult.success && inventoryResult.data) {
+          setAllInventoryItems(inventoryResult.data)
       }
   }
 
@@ -274,7 +271,7 @@ export function DestinationManagement() {
                         <TableRow key={item.id}>
                           <TableCell className="font-mono font-medium">{item.uniqueCode}</TableCell>
                           <TableCell><div className="font-medium">{item.product.name}</div></TableCell>
-                          <TableCell><Badge variant="outline" className={STATUS_COLORS[item.status]}>{item.status}</Badge></TableCell>
+                          <TableCell><Badge variant="outline" className={STATUS_COLORS[item.status as keyof typeof STATUS_COLORS]}>{item.status}</Badge></TableCell>
                           <TableCell>{item.yearOfPurchase}</TableCell>
                            {canEdit() && (
                              <TableCell className="text-right">
@@ -304,6 +301,7 @@ export function DestinationManagement() {
                     destinationId={viewingDestination.id}
                     categories={categories}
                     products={products}
+                    allInventoryItems={allInventoryItems}
                     onSuccess={() => { setIsAddItemDialogOpen(false); refreshDestinations() }}
                     onCancel={() => setIsAddItemDialogOpen(false)}
                 />
@@ -411,60 +409,262 @@ function EditDestinationForm({ destination, onSuccess, onCancel }: { destination
   )
 }
 
-function AddInventoryItemForm({ destinationId, categories, products, onSuccess, onCancel }: { destinationId: string; categories: ApiCategory[], products: ApiProduct[], onSuccess: () => void; onCancel: () => void }) {
+function AddInventoryItemForm({ 
+    destinationId, 
+    categories, 
+    products, 
+    allInventoryItems, 
+    onSuccess, 
+    onCancel 
+}: { 
+    destinationId: string; 
+    categories: ApiCategory[]; 
+    products: ApiProduct[]; 
+    allInventoryItems: ApiInventoryItem[];
+    onSuccess: () => void; 
+    onCancel: () => void; 
+}) {
     const [formData, setFormData] = useState({
-        productId: "",
         categoryId: "",
-        status: "active",
+        productId: "",
+        uniqueCode: "",
         yearOfPurchase: new Date().getFullYear().toString(),
     });
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const apiService = ApiService.getInstance();
 
+    // Get available unique codes for selected product
+    const getAvailableUniqueCodes = () => {
+        if (!formData.productId) return [];
+        
+        const selectedProduct = products.find(p => p.id === formData.productId);
+        if (!selectedProduct) return [];
+        
+        // Get the product's unique code (like "OCH", "NEW", "TAB", etc.)
+        const productCode = selectedProduct.uniqueCode;
+        
+        // Find ALL inventory items that match this product code pattern
+        // This will show existing OCH-001, OCH-002, etc. for any OCH product
+        const matchingCodeItems = allInventoryItems.filter(item => {
+            // Check if the item's unique code contains the product code
+            return item.uniqueCode.includes(`-${productCode}-`);
+        });
+        
+        // Only show existing codes that can be moved (not assigned to current destination)
+        const availableCodes = matchingCodeItems
+            .filter(item => !item.destinationId || item.destinationId !== destinationId)
+            .map(item => item.uniqueCode);
+        
+        // Remove duplicates and sort
+        return [...new Set(availableCodes)].sort((a, b) => {
+            // Sort by the number at the end
+            const numA = parseInt(a.split('-').pop() || '0');
+            const numB = parseInt(b.split('-').pop() || '0');
+            return numA - numB;
+        });
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
-        if (!formData.productId || !formData.categoryId) {
-            setError("Please select a category and a product.");
+        
+        if (!formData.categoryId || !formData.productId || !formData.uniqueCode) {
+            setError("Please fill in all required fields.");
             return;
         }
+        
         setIsLoading(true);
         try {
-            const result = await apiService.createInventoryItem({ 
-                ...formData, 
-                destinationId, 
-                yearOfPurchase: parseInt(formData.yearOfPurchase) 
-            });
-            if (result.success) {
-                console.log(`AUDIT: Item added to destination ${destinationId}`);
-                onSuccess();
+            // Find the existing inventory item with this unique code
+            const existingItem = allInventoryItems.find(item => item.uniqueCode === formData.uniqueCode);
+            
+            if (existingItem) {
+                // Update existing item to move it to this destination
+                // Keep the original product and category of the existing item
+                const result = await apiService.updateInventoryItem(existingItem.id, {
+                    status: "active", // Default to active
+                    yearOfPurchase: parseInt(formData.yearOfPurchase),
+                    productId: existingItem.productId, // Keep original product
+                    categoryId: existingItem.categoryId, // Keep original category
+                    destinationId: destinationId,
+                });
+                
+                if (result.success) {
+                    console.log(`AUDIT: Item ${formData.uniqueCode} moved to destination ${destinationId}`);
+                    onSuccess();
+                } else {
+                    setError(result.error || "Failed to move item to destination.");
+                }
             } else {
-                setError(result.error || "Failed to add item.");
+                // Create new inventory item with the selected unique code
+                const result = await apiService.createInventoryItem({
+                    uniqueCode: formData.uniqueCode,
+                    status: "active",
+                    yearOfPurchase: parseInt(formData.yearOfPurchase),
+                    productId: formData.productId,
+                    categoryId: formData.categoryId,
+                    destinationId: destinationId,
+                });
+                
+                if (result.success) {
+                    console.log(`AUDIT: New item ${formData.uniqueCode} created in destination ${destinationId}`);
+                    onSuccess();
+                } else {
+                    setError(result.error || "Failed to create new inventory item.");
+                }
             }
-        } catch(err) { setError("An unexpected error occurred.") } 
-        finally { setIsLoading(false) }
-    }
+        } catch(err) { 
+            setError("An unexpected error occurred.") 
+        } finally { 
+            setIsLoading(false) 
+        }
+    };
 
     const filteredProducts = products.filter(p => p.categoryId === formData.categoryId);
+    const availableUniqueCodes = getAvailableUniqueCodes();
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-            <Select onValueChange={(value) => setFormData({...formData, categoryId: value, productId: ""})}>
-                <SelectTrigger><SelectValue placeholder="Select Category *"/></SelectTrigger>
-                <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select onValueChange={(value) => setFormData({...formData, productId: value})} value={formData.productId} disabled={!formData.categoryId}>
-                <SelectTrigger><SelectValue placeholder="Select Product *"/></SelectTrigger>
-                <SelectContent>{filteredProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Input type="number" placeholder="Year of Purchase" value={formData.yearOfPurchase} onChange={e => setFormData({...formData, yearOfPurchase: e.target.value})}/>
-            <Select onValueChange={(value) => setFormData({...formData, status: value as any})} defaultValue="active">
-                <SelectTrigger><SelectValue placeholder="Select status"/></SelectTrigger>
-                <SelectContent>{Object.keys(STATUS_COLORS).map(s => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}</SelectContent>
-            </Select>
-            {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-            <div className="flex space-x-2"><Button type="button" variant="outline" onClick={onCancel} className="flex-1">Cancel</Button><Button type="submit" className="flex-1" disabled={isLoading || !formData.productId}>{isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding...</> : "Add Item"}</Button></div>
+            {/* Category Selection */}
+            <div className="space-y-2">
+                <Label htmlFor="category">Category *</Label>
+                <Select 
+                    value={formData.categoryId}
+                    onValueChange={(value) => setFormData({
+                        ...formData, 
+                        categoryId: value, 
+                        productId: "", 
+                        uniqueCode: ""
+                    })}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Category"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {categories.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Product Selection */}
+            <div className="space-y-2">
+                <Label htmlFor="product">Product *</Label>
+                <Select 
+                    value={formData.productId}
+                    onValueChange={(value) => setFormData({
+                        ...formData, 
+                        productId: value, 
+                        uniqueCode: ""
+                    })}
+                    disabled={!formData.categoryId}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Product"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {filteredProducts.length === 0 ? (
+                            <div className="py-2 px-3 text-sm text-muted-foreground">
+                                No products found for this category
+                            </div>
+                        ) : (
+                            filteredProducts.map(p => (
+                                <SelectItem key={p.id} value={p.id}>
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">{p.name}</span>
+                                        <span className="text-xs text-muted-foreground">Code: {p.uniqueCode}</span>
+                                    </div>
+                                </SelectItem>
+                            ))
+                        )}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Unique Code Selection */}
+            <div className="space-y-2">
+                <Label htmlFor="uniqueCode">Available Unique Codes *</Label>
+                <Select 
+                    value={formData.uniqueCode}
+                    onValueChange={(value) => setFormData({...formData, uniqueCode: value})}
+                    disabled={!formData.productId}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Unique Code"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableUniqueCodes.length === 0 ? (
+                            <div className="py-2 px-3 text-sm text-muted-foreground">
+                                {formData.productId ? "No available codes for this product" : "Select a product first"}
+                            </div>
+                        ) : (
+                            availableUniqueCodes.map(code => {
+                                const existingItem = allInventoryItems.find(item => item.uniqueCode === code);
+                                const isExisting = !!existingItem;
+                                return (
+                                    <SelectItem key={code} value={code}>
+                                        <div className="flex flex-col w-full">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-mono text-sm">{code}</span>
+                                                {isExisting && (
+                                                    <span className="text-xs text-blue-600 ml-2">(Move)</span>
+                                                )}
+                                            </div>
+                                            {isExisting && existingItem && (
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                    From: {existingItem.product.name} • {existingItem.destinationId ? "Other location" : "Unassigned"}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </SelectItem>
+                                );
+                            })
+                        )}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Year of Purchase */}
+            <div className="space-y-2">
+                <Label htmlFor="year">Year of Purchase</Label>
+                <Input 
+                    id="year"
+                    type="number" 
+                    placeholder="Year of Purchase" 
+                    value={formData.yearOfPurchase} 
+                    onChange={e => setFormData({...formData, yearOfPurchase: e.target.value})}
+                    min="1900"
+                    max={new Date().getFullYear() + 1}
+                />
+            </div>
+
+            {error && (
+                <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            )}
+            
+            <div className="flex space-x-2">
+                <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+                    Cancel
+                </Button>
+                <Button 
+                    type="submit" 
+                    className="flex-1" 
+                    disabled={isLoading || !formData.uniqueCode}
+                >
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" /> 
+                            Adding...
+                        </>
+                    ) : (
+                        "Add Item"
+                    )}
+                </Button>
+            </div>
         </form>
     );
 }

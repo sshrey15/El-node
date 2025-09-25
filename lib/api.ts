@@ -154,6 +154,7 @@ export interface UpdateCategoryRequest {
 }
 
 export interface CreateInventoryItemRequest {
+  uniqueCode: string
   status: string
   yearOfPurchase: number
   productId: string
