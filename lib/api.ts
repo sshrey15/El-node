@@ -1,3 +1,5 @@
+import { AuthService } from "./auth";
+
 
 export interface ApiDestination {
   id: string
@@ -167,11 +169,26 @@ export interface UpdateInventoryItemRequest {
   categoryId: string
 }
 
+export interface ApiAuditLog {
+  id: string
+  action: string
+  message: string
+  entityType: string
+  entityId: string
+  details: string | null
+  createdAt: string
+  userId: string
+}
+
 export class ApiService {
   private static instance: ApiService
   private baseUrl = "https://el-node-backend.vercel.app/api"
+  private auditLogsUrl = "http://localhost:5000/api"
+  private authService = AuthService.getInstance(); // Get instance of AuthService to access the token
+
 
   private constructor() {}
+
 
   static getInstance(): ApiService {
     if (!ApiService.instance) {
@@ -179,6 +196,16 @@ export class ApiService {
     }
     return ApiService.instance
   }
+
+  private getAuthHeaders(): HeadersInit {
+    const token = this.authService.getAuthToken();
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }
+
 
   // GET /api/destinations
   async getDestinations(): Promise<{ success: boolean; data?: ApiDestination[]; error?: string }> {
@@ -203,7 +230,7 @@ export class ApiService {
     try {
       const response = await fetch(`${this.baseUrl}/destinations`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(destination),
         credentials: 'include',
       })
@@ -221,7 +248,7 @@ export class ApiService {
     try {
       const response = await fetch(`${this.baseUrl}/destinations/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(destination),
         credentials: 'include',
       })
@@ -237,7 +264,16 @@ export class ApiService {
   // DELETE /api/destinations/:id
   async deleteDestination(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/destinations/${id}`, { method: "DELETE", credentials: 'include' })
+      const token = this.authService.getAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(`${this.baseUrl}/destinations/${id}`, { 
+        method: "DELETE", 
+        headers: headers,
+        credentials: 'include' 
+      })
       if (response.ok) return { success: true }
       const errorData = await response.json()
       return { success: false, error: errorData.message || "Failed to delete destination" }
@@ -263,13 +299,19 @@ export class ApiService {
   // ✅ CHANGED: POST /api/products using FormData
   async createProduct(productData: FormData): Promise<{ success: boolean; data?: ApiProduct; error?: string }> {
     try {
+        const token = this.authService.getAuthToken();
+        const headers: HeadersInit = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        // Do NOT set Content-Type for FormData - browser sets it automatically with boundary
+
         const response = await fetch(`${this.baseUrl}/products`, {
             method: "POST",
+            headers: headers, // Only authorization header for FormData
             body: productData, // Send FormData directly
             credentials: 'include',
-            // ❌ DO NOT set 'Content-Type' header, the browser does it automatically for FormData
         })
-
         if (response.ok) return { success: true, data: await response.json() }
 
         const errorText = await response.text();
@@ -288,11 +330,18 @@ export class ApiService {
 // ✅ CHANGED: PUT /api/products/:id using FormData
 async updateProduct(id: string, productData: FormData): Promise<{ success: boolean; data?: ApiProduct; error?: string }> {
     try {
+        const token = this.authService.getAuthToken();
+        const headers: HeadersInit = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        // Do NOT set Content-Type for FormData - browser sets it automatically with boundary
+
         const response = await fetch(`${this.baseUrl}/products/${id}`, {
             method: "PUT",
+            headers: headers, // Only authorization header for FormData
             body: productData, // Send FormData directly
             credentials: 'include',
-             // ❌ DO NOT set 'Content-Type' header
         })
 
         if (response.ok) return { success: true, data: await response.json() }
@@ -313,7 +362,16 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
   // DELETE /api/products/:id
   async deleteProduct(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/products/${id}`, { method: "DELETE", credentials: 'include' })
+      const token = this.authService.getAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(`${this.baseUrl}/products/${id}`, { 
+        method: "DELETE", 
+        headers: headers,
+        credentials: 'include' 
+      })
       if (response.ok) return { success: true }
       const errorData = await response.json()
       return { success: false, error: errorData.message || "Failed to delete product" }
@@ -341,7 +399,7 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
     try {
       const response = await fetch(`${this.baseUrl}/categories`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(category),
         credentials: 'include',
       })
@@ -359,7 +417,7 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
     try {
       const response = await fetch(`${this.baseUrl}/categories/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(category),
         credentials: 'include',
       })
@@ -375,7 +433,16 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
   // DELETE /api/categories/:id
   async deleteCategory(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/categories/${id}`, { method: "DELETE", credentials: 'include' })
+      const token = this.authService.getAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(`${this.baseUrl}/categories/${id}`, { 
+        method: "DELETE", 
+        headers: headers,
+        credentials: 'include' 
+      })
       if (response.ok) return { success: true }
       const errorData = await response.json()
       return { success: false, error: errorData.message || "Failed to delete category" }
@@ -389,7 +456,15 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
   async getInventoryItems(): Promise<{ success: boolean; data?: ApiInventoryItem[]; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/inventory`, { credentials: 'include' })
-      if (response.ok) return { success: true, data: await response.json() }
+      if (response.ok) {
+        const data = await response.json()
+        // Sort by createdAt in descending order (newest first)
+        const sortedData = data.sort((a: ApiInventoryItem, b: ApiInventoryItem) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        return { success: true, data: sortedData }
+      }
+      
       const errorData = await response.json()
       return { success: false, error: errorData.message || "Failed to fetch inventory items" }
     } catch (error) {
@@ -402,8 +477,8 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
   async createInventoryItem(item: CreateInventoryItemRequest): Promise<{ success: boolean; data?: ApiInventoryItem; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/inventory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+         method: "POST",
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(item),
         credentials: 'include',
       })
@@ -421,7 +496,7 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
     try {
       const response = await fetch(`${this.baseUrl}/inventory/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(item),
         credentials: 'include',
       })
@@ -437,12 +512,65 @@ async updateProduct(id: string, productData: FormData): Promise<{ success: boole
   // DELETE /api/inventory/:id
   async deleteInventoryItem(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/inventory/${id}`, { method: "DELETE", credentials: 'include' })
+      const token = this.authService.getAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(`${this.baseUrl}/inventory/${id}`, { 
+        method: "DELETE", 
+        headers: headers,
+        credentials: 'include' 
+      })
       if (response.ok) return { success: true }
-      const errorData = await response.json()
-      return { success: false, error: errorData.message || "Failed to delete inventory item" }
+      
+      // Better error handling for non-200 responses
+      const errorText = await response.text();
+      try {
+        const errorData = JSON.parse(errorText);
+        return { success: false, error: errorData.message || errorData.error || `Failed to delete inventory item (${response.status})` }
+      } catch (e) {
+        return { success: false, error: `Failed to delete inventory item: ${response.status} ${response.statusText}` }
+      }
     } catch (error) {
       console.error("Delete inventory item error:", error)
+      return { success: false, error: "A network error occurred." }
+    }
+  }
+
+  // GET /api/auditlogs
+  async getAuditLogs(): Promise<{ success: boolean; data?: ApiAuditLog[]; error?: string }> {
+    try {
+      const token = this.authService.getAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${this.baseUrl}/auditlogs`, {
+        method: "GET",
+        headers: headers,
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Sort by createdAt in descending order (latest first)
+        const sortedData = data.sort((a: ApiAuditLog, b: ApiAuditLog) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        return { success: true, data: sortedData }
+      }
+
+      const errorText = await response.text();
+      try {
+        const errorData = JSON.parse(errorText);
+        return { success: false, error: errorData.message || "Failed to fetch audit logs" }
+      } catch (e) {
+        return { success: false, error: `Failed to fetch audit logs: ${response.statusText}` }
+      }
+    } catch (error) {
+      console.error("Get audit logs error:", error)
       return { success: false, error: "A network error occurred." }
     }
   }

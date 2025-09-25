@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const canEdit = () => authService.canEdit()
-  const hasRole = (role: "admin" | "viewer") => authService.hasRole(role)
+  const hasRole = (role: "admin" | "viewer") => user?.role === role
 
   return (
     <AuthContext.Provider

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { Plus, Search, Package, Trash2, Edit, Loader2, Filter } from "lucide-react"
 import {
   AlertDialog,
@@ -50,6 +51,8 @@ export function InventoryManagement() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<ApiInventoryItem | null>(null)
@@ -109,6 +112,22 @@ export function InventoryManagement() {
 
     return matchesSearch && matchesStatus
   })
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedItems = filteredItems.slice(startIndex, endIndex)
+
+  // Reset to first page when filters change
+  const resetPagination = () => {
+    setCurrentPage(1)
+  }
+
+  // Reset pagination when search or filter changes
+  useEffect(() => {
+    resetPagination()
+  }, [searchTerm, statusFilter])
 
   const handleDeleteItem = async () => {
     if (!itemToDelete) return
@@ -209,14 +228,36 @@ export function InventoryManagement() {
               <SelectItem value="missing">Missing</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+            setItemsPerPage(parseInt(value))
+            setCurrentPage(1)
+          }}>
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5">5</SelectItem>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {/* Inventory Items Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Inventory Items ({filteredItems.length})</CardTitle>
-          <CardDescription>All inventory items in your system</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Inventory Items ({filteredItems.length})</CardTitle>
+              <CardDescription>
+                {filteredItems.length > 0 && (
+                  <>Showing {startIndex + 1} to {Math.min(endIndex, filteredItems.length)} of {filteredItems.length} items</>
+                )}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {filteredItems.length === 0 ? (
@@ -236,83 +277,158 @@ export function InventoryManagement() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Unique Code</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Destination</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono font-medium">{item.uniqueCode}</TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{item.product.name}</div>
-                          <div className="text-sm text-muted-foreground">{item.product.uniqueCode}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{item.category.name}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {item.destination ? (
-                          <div>
-                            <div className="font-medium">{item.destination.name}</div>
-                            <div className="text-sm text-muted-foreground">{item.destination.description}</div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">No destination</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={STATUS_COLORS[item.status as keyof typeof STATUS_COLORS]}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{item.yearOfPurchase}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          {canEdit() && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditItem(item)}
-                                className="text-blue-600 hover:text-blue-700"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setDeleteError(null)
-                                  setItemToDelete(item)
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Unique Code</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Destination</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Year</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono font-medium">{item.uniqueCode}</TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{item.product.name}</div>
+                            <div className="text-sm text-muted-foreground">{item.product.uniqueCode}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{item.category.name}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {item.destination ? (
+                            <div>
+                              <div className="font-medium">{item.destination.name}</div>
+                              <div className="text-sm text-muted-foreground">{item.destination.description}</div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">No destination</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={STATUS_COLORS[item.status as keyof typeof STATUS_COLORS]}>
+                            {item.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{item.yearOfPurchase}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            {canEdit() && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditItem(item)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setDeleteError(null)
+                                    setItemToDelete(item)
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center mt-4">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (currentPage > 1) {
+                              setCurrentPage(currentPage - 1)
+                            }
+                          }}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      
+                      {/* Generate page numbers */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum = i + 1
+                        
+                        // Adjust page numbers to show current page in center when possible
+                        if (totalPages > 5) {
+                          if (currentPage <= 3) {
+                            pageNum = i + 1
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i
+                          } else {
+                            pageNum = currentPage - 2 + i
+                          }
+                        }
+
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setCurrentPage(pageNum)
+                              }}
+                              isActive={currentPage === pageNum}
+                              className="cursor-pointer"
+                            >
+                              {pageNum}
+                            </PaginationLink>
+                          </PaginationItem>
+                        )
+                      })}
+
+                      {totalPages > 5 && currentPage < totalPages - 2 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (currentPage < totalPages) {
+                              setCurrentPage(currentPage + 1)
+                            }
+                          }}
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

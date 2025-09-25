@@ -6,12 +6,12 @@ import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Package, Settings, LogOut, BarChart3, MapPin, TrendingUp, AlertTriangle, Calendar, Activity, Loader2, FileDown } from "lucide-react"
+import { LayoutDashboard, Package, Settings, LogOut, BarChart3, MapPin, TrendingUp, AlertTriangle, Calendar, Activity, Loader2, FileDown, FileText, Search } from "lucide-react"
 import { ProductManagement } from "@/components/product-management"
 import { InventoryManagement } from "@/components/inventory-management"
 import { CategoryManagement } from "@/components/category-management"
 import { DestinationManagement } from "@/components/destination-management"
-import { ApiService, type ApiInventoryItem, type ApiProduct, type ApiDestination, type ApiCategory } from "@/lib/api"
+import { ApiService, type ApiInventoryItem, type ApiProduct, type ApiDestination, type ApiCategory, type ApiAuditLog } from "@/lib/api"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -49,6 +49,7 @@ export function Dashboard() {
     { id: "inventory", label: "Inventory", icon: Package },
     ...(canEdit() ? [{ id: "categories", label: "Categories", icon: Settings }] : []),
     { id: "products", label: "Products", icon: Package },
+    { id: "audit-logs", label: "Audit Logs", icon: FileText },
   ]
 
   return (
@@ -113,6 +114,7 @@ export function Dashboard() {
           {activeTab === "inventory" && <InventoryManagement />}
           {activeTab === "destinations" && <DestinationManagement />}
           {activeTab === "categories" && canEdit() && <CategoryManagement />}
+          {activeTab === "audit-logs" && <AuditLogsManagement />}
         </main>
       </div>
     </div>
@@ -132,6 +134,7 @@ function DashboardOverview() {
   const [products, setProducts] = useState<ApiProduct[]>([])
   const [destinations, setDestinations] = useState<ApiDestination[]>([])
   const [categories, setCategories] = useState<ApiCategory[]>([])
+  const [auditLogs, setAuditLogs] = useState<ApiAuditLog[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [timeRange, setTimeRange] = useState("all")
@@ -146,11 +149,12 @@ function DashboardOverview() {
     setIsLoading(true)
     setError("")
     try {
-      const [inventoryResult, productsResult, destinationsResult, categoriesResult] = await Promise.all([
+      const [inventoryResult, productsResult, destinationsResult, categoriesResult, auditLogsResult] = await Promise.all([
         apiService.getInventoryItems(),
         apiService.getProducts(),
         apiService.getDestinations(),
         apiService.getCategories(),
+        apiService.getAuditLogs(),
       ])
 
       if (inventoryResult.success && inventoryResult.data) setInventoryItems(inventoryResult.data)
@@ -158,6 +162,7 @@ function DashboardOverview() {
       if (productsResult.success && productsResult.data) setProducts(productsResult.data)
       if (destinationsResult.success && destinationsResult.data) setDestinations(destinationsResult.data)
       if (categoriesResult.success && categoriesResult.data) setCategories(categoriesResult.data)
+      if (auditLogsResult.success && auditLogsResult.data) setAuditLogs(auditLogsResult.data)
 
     } catch (error) {
       console.error("Error loading dashboard data:", error)
@@ -374,6 +379,79 @@ function DashboardOverview() {
           ) : <div className="text-center py-8 text-muted-foreground">No categories to display</div>}
         </CardContent>
       </Card>
+
+      {/* Recent Activity Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Activity className="h-5 w-5 mr-2" />
+            Recent Activity
+          </CardTitle>
+          <CardDescription>Latest system activities and changes</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {auditLogs.length > 0 ? (
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {auditLogs.slice(0, 10).map((log) => {
+                const getActionColor = (action: string) => {
+                  switch (action.toLowerCase()) {
+                    case 'create': return 'bg-green-100 text-green-800 border-green-200'
+                    case 'update': return 'bg-blue-100 text-blue-800 border-blue-200'
+                    case 'delete': return 'bg-red-100 text-red-800 border-red-200'
+                    default: return 'bg-gray-100 text-gray-800 border-gray-200'
+                  }
+                }
+
+                const getEntityTypeColor = (entityType: string) => {
+                  switch (entityType.toLowerCase()) {
+                    case 'product': return 'bg-purple-100 text-purple-800 border-purple-200'
+                    case 'category': return 'bg-orange-100 text-orange-800 border-orange-200'
+                    case 'inventory': return 'bg-cyan-100 text-cyan-800 border-cyan-200'
+                    case 'destination': return 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                    default: return 'bg-gray-100 text-gray-800 border-gray-200'
+                  }
+                }
+
+                return (
+                  <div key={log.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="w-2 h-2 bg-primary rounded-full"></div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Badge className={`text-xs border ${getActionColor(log.action)}`}>
+                            {log.action}
+                          </Badge>
+                          <Badge variant="outline" className={`text-xs border ${getEntityTypeColor(log.entityType)}`}>
+                            {log.entityType}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(log.createdAt).toLocaleDateString()} {new Date(log.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground">{log.message}</p>
+                    </div>
+                  </div>
+                )
+              })}
+              {auditLogs.length > 10 && (
+                <div className="text-center pt-2">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground">
+                    View all {auditLogs.length} activities →
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No recent activities found</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -493,4 +571,161 @@ function ExportDialog({ items, categories, destinations, onClose }: { items: Api
             </DialogFooter>
         </DialogContent>
     )
+}
+
+// --- New Component for Audit Logs Management ---
+function AuditLogsManagement() {
+  const [auditLogs, setAuditLogs] = useState<ApiAuditLog[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [searchTerm, setSearchTerm] = useState("")
+  const apiService = ApiService.getInstance()
+
+  useEffect(() => {
+    loadAuditLogs()
+  }, [])
+
+  const loadAuditLogs = async () => {
+    setIsLoading(true)
+    setError("")
+    try {
+      const result = await apiService.getAuditLogs()
+      if (result.success && result.data) {
+        setAuditLogs(result.data)
+      } else {
+        setError(result.error || "Failed to load audit logs")
+      }
+    } catch (error) {
+      console.error("Error loading audit logs:", error)
+      setError("Failed to load audit logs")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const filteredLogs = auditLogs.filter((log) => {
+    return (
+      log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.entityType.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  })
+
+  const getActionColor = (action: string) => {
+    switch (action.toLowerCase()) {
+      case 'create':
+        return 'bg-green-100 text-green-800'
+      case 'update':
+        return 'bg-blue-100 text-blue-800'
+      case 'delete':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getEntityTypeColor = (entityType: string) => {
+    switch (entityType.toLowerCase()) {
+      case 'product':
+        return 'bg-purple-100 text-purple-800'
+      case 'category':
+        return 'bg-orange-100 text-orange-800'
+      case 'inventory':
+        return 'bg-cyan-100 text-cyan-800'
+      case 'destination':
+        return 'bg-indigo-100 text-indigo-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading audit logs...</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-foreground">Audit Logs</h2>
+          <p className="text-muted-foreground">Track all system activities and changes</p>
+        </div>
+        <Button variant="outline" onClick={loadAuditLogs}>
+          <Activity className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="relative">
+        <Activity className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search logs by message, action, or entity type..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity Timeline ({filteredLogs.length})</CardTitle>
+          <CardDescription>Recent system activities and changes</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">
+                {searchTerm ? "No logs match your search" : "No audit logs found"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+              {filteredLogs.map((log) => (
+                <div key={log.id} className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="w-2 h-2 bg-primary rounded-full"></div>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Badge className={`text-xs ${getActionColor(log.action)}`}>
+                          {log.action}
+                        </Badge>
+                        <Badge variant="outline" className={`text-xs ${getEntityTypeColor(log.entityType)}`}>
+                          {log.entityType}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-foreground">{log.message}</p>
+                    {log.details && (
+                      <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                        {log.details}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
 }

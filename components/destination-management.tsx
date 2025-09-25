@@ -349,7 +349,11 @@ export function DestinationManagement() {
               <DialogTitle>Edit Destination</DialogTitle>
               <DialogDescription>Update destination information</DialogDescription>
             </DialogHeader>
-            <EditDestinationForm destination={editingDestination} onSuccess={() => { refreshDestinations(); setIsEditDestinationDialogOpen(false); setEditingDestination(null) }} onCancel={() => { setIsEditDestinationDialogOpen(false); setEditingDestination(null) }} />
+            <EditDestinationForm
+              destination={editingDestination}
+              onSuccess={() => { refreshDestinations(); setIsEditDestinationDialogOpen(false); setEditingDestination(null) }}
+              onCancel={() => { setIsEditDestinationDialogOpen(false); setEditingDestination(null) }}
+            />
           </DialogContent>
         </Dialog>
       )}
